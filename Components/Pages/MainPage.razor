@@ -54,6 +54,15 @@
                             <DxFormLayoutGroup Caption="Iniciar Sesión"
                                               ColSpanMd="12">
                                 <Items>
+                                    <DxFormLayoutItem Caption="Código de Empresa:" 
+                                                     ColSpanMd="12"
+                                                     CaptionPosition="CaptionPosition.Vertical">
+                                        <Template>
+                                            <DxTextBox @bind-Text="@companyCode" 
+                                                      CssClass="login-textbox"
+                                                      NullText="Ingrese el código de empresa" />
+                                        </Template>
+                                    </DxFormLayoutItem>
                                     <DxFormLayoutItem Caption="Usuario:" 
                                                      ColSpanMd="12"
                                                      CaptionPosition="CaptionPosition.Vertical">
@@ -93,11 +102,13 @@
 </div>
 
 @code {
+    private string companyCode = "";
     private string username = "";
     private string password = "";
 
     private void OnLoginClick()
     {
         // Aquí puedes agregar la lógica de autenticación
+        // Ahora tienes acceso a: companyCode, username y password
     }
 }

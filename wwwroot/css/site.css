@@ -1,5 +1,3 @@
-@import url('./icons.css');
-
 html, body {
     display: flex;
     flex-direction: column;
@@ -76,44 +74,4 @@ html, body {
     height: 100%;
     justify-content: center;
     width: 100%;
-}
-
-/* Estilos globales para el menú horizontal con fondo primario */
-.horizontal-menu,
-.horizontal-menu .dxbl-menu,
-.horizontal-menu .dxbl-menu-horizontal {
-    background-color: var(--dxds-color-surface-primary-default-rest) !important;
-}
-
-.horizontal-menu .dxbl-menu-item {
-    color: white !important;
-    background-color: transparent !important;
-}
-
-.horizontal-menu .dxbl-menu-item:hover,
-.horizontal-menu .dxbl-menu-item.dxbl-menu-item-hover,
-.horizontal-menu .dxbl-menu-item-highlighted,
-.horizontal-menu .dxbl-menu-item[data-hovered="true"],
-.horizontal-menu .dxbl-menu-item.dxbl-highlighted {
-    background-color: var(--dxds-color-surface-primary-default-hover) !important;
-    color: white !important;
-}
-
-.horizontal-menu .dxbl-menu-item:active,
-.horizontal-menu .dxbl-menu-item.dxbl-menu-item-active {
-    background-color: var(--dxds-color-surface-primary-default-active) !important;
-}
-
-.horizontal-menu .dxbl-menu-item-text,
-.horizontal-menu .dxbl-menu-item-content {
-    color: white !important;
-}
-
-/* Sobrescribir el hover del span.dxbl-menu-item-text */
-.horizontal-menu span.dxbl-menu-item-text:hover,
-.horizontal-menu .dxbl-menu-item:hover span.dxbl-menu-item-text,
-.horizontal-menu .dxbl-menu-item.dxbl-highlighted span.dxbl-menu-item-text,
-.horizontal-menu .dxbl-menu-item[data-hovered="true"] span.dxbl-menu-item-text {
-    background-color: var(--dxds-color-surface-primary-default-hover) !important;
-    color: white !important;
 }
