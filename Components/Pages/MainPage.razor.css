@@ -1,0 +1,108 @@
+.main-page-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+}
+
+.top-menu {
+    background-color: var(--dxds-color-surface-primary-default-rest);
+    border-bottom: 1px solid var(--dxds-color-surface-primary-default-active);
+    padding: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.horizontal-menu {
+    margin: 0;
+    background-color: var(--dxds-color-surface-primary-default-rest) !important;
+}
+
+/* Estilos para el menú con fondo azul */
+::deep .horizontal-menu {
+    background-color: var(--dxds-color-surface-primary-default-rest) !important;
+}
+
+::deep .horizontal-menu .dxbl-menu {
+    background-color: var(--dxds-color-surface-primary-default-rest) !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-horizontal {
+    background-color: var(--dxds-color-surface-primary-default-rest) !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-item {
+    color: white !important;
+    background-color: transparent !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-item:hover,
+::deep .horizontal-menu .dxbl-menu-item.dxbl-menu-item-hover,
+::deep .horizontal-menu .dxbl-menu-item-highlighted {
+    background-color: var(--dxds-color-surface-primary-default-hover) !important;
+    color: white !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-item:active,
+::deep .horizontal-menu .dxbl-menu-item.dxbl-menu-item-active {
+    background-color: var(--dxds-color-surface-primary-default-active) !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-item-content:hover {
+    background-color: var(--dxds-color-surface-primary-default-hover) !important;
+}
+
+::deep .horizontal-menu a:hover {
+    background-color: var(--dxds-color-surface-primary-default-hover) !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-item-text {
+    color: white !important;
+}
+
+::deep .horizontal-menu .dxbl-menu-item-content {
+    color: white !important;
+}
+
+.tab-container {
+    flex: 1;
+    padding: 20px;
+    overflow: auto;
+    background-color: #ffffff;
+}
+
+.tabs {
+    height: 100%;
+}
+
+.login-tab {
+    height: 100%;
+}
+
+.login-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    min-height: 400px;
+}
+
+.login-form {
+    width: 100%;
+    max-width: 450px;
+    margin: 0 auto;
+}
+
+.login-textbox {
+    width: 100%;
+}
+
+.button-item {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.login-button {
+    min-width: 200px;
+    padding: 10px 30px;
+}

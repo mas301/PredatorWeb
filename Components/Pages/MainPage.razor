@@ -1,0 +1,103 @@
+@page "/"
+@layout SimpleLayout
+
+<PageTitle>PredatorWeb</PageTitle>
+
+<style>
+    /* Estilos para items personalizados del menú */
+    .custom-menu-item {
+        padding: 8px 16px;
+        color: white !important;
+        background-color: transparent !important;
+        cursor: pointer;
+        display: block;
+        width: 100%;
+        transition: background-color 0.2s ease;
+    }
+
+    .custom-menu-item:hover {
+        background-color: rgba(0, 0, 0, 0.2) !important;
+    }
+
+    .custom-menu-item:active {
+        background-color: rgba(0, 0, 0, 0.3) !important;
+    }
+</style>
+
+<div class="main-page-container">
+    <div class="top-menu">
+        <DxMenu Orientation="Orientation.Horizontal" 
+                CssClass="horizontal-menu">
+            <Items>
+                <DxMenuItem>
+                    <Template>
+                        <span class="custom-menu-item">Archivo</span>
+                    </Template>
+                    <Items>
+                        <DxMenuItem Text="Nuevo"></DxMenuItem>
+                        <DxMenuItem Text="Abrir"></DxMenuItem>
+                        <DxMenuItem Text="Guardar"></DxMenuItem>
+                        <DxMenuItem BeginGroup="true" Text="Salir"></DxMenuItem>
+                    </Items>
+                </DxMenuItem>
+            </Items>
+        </DxMenu>
+    </div>
+
+    <div class="tab-container">
+        <DxTabs CssClass="tabs">
+            <DxTabPage Text="Login" 
+                       CssClass="login-tab">
+                <Content>
+                    <div class="login-content">
+                        <DxFormLayout CssClass="login-form">
+                            <DxFormLayoutGroup Caption="Iniciar Sesión"
+                                              ColSpanMd="12">
+                                <Items>
+                                    <DxFormLayoutItem Caption="Usuario:" 
+                                                     ColSpanMd="12"
+                                                     CaptionPosition="CaptionPosition.Vertical">
+                                        <Template>
+                                            <DxTextBox @bind-Text="@username" 
+                                                      CssClass="login-textbox"
+                                                      NullText="Ingrese su usuario" />
+                                        </Template>
+                                    </DxFormLayoutItem>
+                                    <DxFormLayoutItem Caption="Contraseña:" 
+                                                     ColSpanMd="12"
+                                                     CaptionPosition="CaptionPosition.Vertical">
+                                        <Template>
+                                            <DxTextBox @bind-Text="@password" 
+                                                      Password="true"
+                                                      CssClass="login-textbox"
+                                                      NullText="Ingrese su contraseña" />
+                                        </Template>
+                                    </DxFormLayoutItem>
+                                    <DxFormLayoutItem ColSpanMd="12" 
+                                                     CssClass="button-item">
+                                        <Template>
+                                            <DxButton Text="Iniciar Sesión" 
+                                                     RenderStyle="ButtonRenderStyle.Primary" 
+                                                     Click="OnLoginClick"
+                                                     CssClass="login-button" />
+                                        </Template>
+                                    </DxFormLayoutItem>
+                                </Items>
+                            </DxFormLayoutGroup>
+                        </DxFormLayout>
+                    </div>
+                </Content>
+            </DxTabPage>
+        </DxTabs>
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string password = "";
+
+    private void OnLoginClick()
+    {
+        // Aquí puedes agregar la lógica de autenticación
+    }
+}
