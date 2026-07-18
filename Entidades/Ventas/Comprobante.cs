@@ -4,7 +4,7 @@
     {
         public ComprobanteVenta()
         {
-            NombreEntidad = "Comprobante";
+            NombreEntidad = "ComprobanteVenta";
             NombreTabla ="VenComprobante";
             NombreProcedimiento="VenComprobantesMantenimimento";
             NombreVista= "VenComprobanteVistaLista";

@@ -41,25 +41,43 @@
             <table class="data-grid">
                 <thead>
                     <tr>
+                        <th class="checkbox-column">
+                            <input type="checkbox"
+                                   checked="@AreAllSelected()"
+                                   @onchange="ToggleSelectAll" />
+                        </th>
                         @foreach (DataColumn column in gridData.Columns)
                         {
-                            <th @onclick="@(() => SortByColumn(column.ColumnName))">
-                                @column.ColumnName
-                                @if (sortColumn == column.ColumnName)
-                                {
-                                    <span>@(sortAscending ? "▲" : "▼")</span>
-                                }
-                            </th>
+                            @if (!ShouldHideColumn(column.ColumnName))
+                            {
+                                <th @onclick="@(() => SortByColumn(column.ColumnName))" class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                    @FormatColumnName(column.ColumnName)
+                                    @if (sortColumn == column.ColumnName)
+                                    {
+                                        <span>@(sortAscending ? "▲" : "▼")</span>
+                                    }
+                                </th>
+                            }
                         }
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (DataRow row in GetPagedData())
                     {
-                        <tr>
+                        <tr class="@(IsRowSelected(row) ? "row-selected" : "")">
+                            <td class="checkbox-column">
+                                <input type="checkbox"
+                                       checked="@IsRowSelected(row)"
+                                       @onchange="@(e => ToggleRowSelection(row, e))" />
+                            </td>
                             @foreach (DataColumn column in gridData.Columns)
                             {
-                                <td>@(row[column] ?? "")</td>
+                                @if (!ShouldHideColumn(column.ColumnName))
+                                {
+                                    <td class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                        @FormatCellValue(row[column], column)
+                                    </td>
+                                }
                             }
                         </tr>
                     }
@@ -96,6 +114,9 @@
     private string? sortColumn;
     private bool sortAscending = true;
 
+    // Selección de filas
+    private readonly HashSet<DataRow> selectedRows = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadDataAsync();
@@ -121,6 +142,7 @@
         try
         {
             gridData = await EntidadService.GetEntidadDataAsync(NombreEntidad);
+            selectedRows.Clear();
             totalRecords = gridData?.Rows.Count ?? 0;
             totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
             currentPage = 1;
@@ -193,5 +215,118 @@
     private void LastPage()
     {
         currentPage = totalPages;
+    }
+
+    private bool ShouldHideColumn(string columnName)
+    {
+        // Ocultar columnas que terminan en "Id"
+        return columnName.EndsWith("Id", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string FormatColumnName(string columnName)
+    {
+        if (string.IsNullOrEmpty(columnName))
+            return columnName;
+
+        // Agregar espacio antes de cada letra mayúscula (excepto la primera)
+        var result = new System.Text.StringBuilder();
+
+        for (int i = 0; i < columnName.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(columnName[i]) && !char.IsUpper(columnName[i - 1]))
+            {
+                result.Append(' ');
+            }
+            result.Append(columnName[i]);
+        }
+
+        return result.ToString();
+    }
+
+    private bool IsNumericColumn(DataColumn column)
+    {
+        return column.DataType == typeof(decimal) ||
+               column.DataType == typeof(double) ||
+               column.DataType == typeof(float) ||
+               column.DataType == typeof(int) ||
+               column.DataType == typeof(long) ||
+               column.DataType == typeof(short);
+    }
+
+    private string FormatCellValue(object value, DataColumn column)
+    {
+        if (value == null || value == DBNull.Value)
+            return "";
+
+        // Formatear fechas en formato corto sin hora
+        if (column.DataType == typeof(DateTime))
+        {
+            return ((DateTime)value).ToString("d");
+        }
+        // Formatear decimales a 2 decimales
+        else if (column.DataType == typeof(decimal))
+        {
+            return ((decimal)value).ToString("N2");
+        }
+        else if (column.DataType == typeof(double))
+        {
+            return ((double)value).ToString("N2");
+        }
+        else if (column.DataType == typeof(float))
+        {
+            return ((float)value).ToString("N2");
+        }
+        // Formatear enteros sin decimales pero con separador de miles
+        else if (column.DataType == typeof(int))
+        {
+            return ((int)value).ToString("N0");
+        }
+        else if (column.DataType == typeof(long))
+        {
+            return ((long)value).ToString("N0");
+        }
+        else if (column.DataType == typeof(short))
+        {
+            return ((short)value).ToString("N0");
+        }
+
+        return value.ToString() ?? "";
+    }
+
+    private bool IsRowSelected(DataRow row) => selectedRows.Contains(row);
+
+    private void ToggleRowSelection(DataRow row, ChangeEventArgs e)
+    {
+        if (e.Value is bool isChecked && isChecked)
+        {
+            selectedRows.Add(row);
+        }
+        else
+        {
+            selectedRows.Remove(row);
+        }
+    }
+
+    private bool AreAllSelected()
+    {
+        var pagedRows = GetPagedData().ToList();
+        return pagedRows.Count > 0 && pagedRows.All(selectedRows.Contains);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool value && value;
+
+        foreach (var row in GetPagedData())
+        {
+            if (isChecked)
+            {
+                selectedRows.Add(row);
+            }
+            else
+            {
+                selectedRows.Remove(row);
+            }
+        }
     }
 }

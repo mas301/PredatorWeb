@@ -378,6 +378,10 @@ input[type="checkbox"] {
     padding: 10px 15px;
     border-bottom: 1px solid #eee;
     color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
 }
 
 .data-grid tbody tr:hover {
@@ -386,4 +390,26 @@ input[type="checkbox"] {
 
 .data-grid tbody tr:last-child td {
     border-bottom: none;
+}
+
+/* Alineación de texto */
+.text-right {
+    text-align: right !important;
+}
+
+/* Columna de selección (checkbox) */
+.data-grid .checkbox-column {
+    width: 40px;
+    text-align: center;
+    cursor: default;
+}
+
+.data-grid .checkbox-column input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.data-grid tbody tr.row-selected {
+    background-color: #e8f0fe;
 }
