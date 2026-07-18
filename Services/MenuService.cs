@@ -53,7 +53,7 @@ public class MenuService
                         };
 
                         menuItems.Add(menu);
-                        _logger.LogInformation($"Menu item cargado: {menu.Menu} (Código: {menu.CodigoMenu})");
+                        _logger.LogInformation($"Menu item cargado: {menu.Menu} (Código: {menu.CodigoMenu}, NombreEntidad: {menu.NombreEntidad})");
                     }
                 }
             }
@@ -105,7 +105,7 @@ public class MenuService
                         };
 
                         subMenuItems.Add(menu);
-                        _logger.LogInformation($"Submenu item cargado: {menu.Menu} (Código: {menu.CodigoMenu})");
+                        _logger.LogInformation($"Submenu item cargado: {menu.Menu} (Código: {menu.CodigoMenu}, NombreEntidad: {menu.NombreEntidad})");
                     }
                 }
             }

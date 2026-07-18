@@ -2,6 +2,8 @@
 @layout SimpleLayout
 @using PredatorWeb.Services
 @inject MenuService MenuService
+@inject EntidadService EntidadService
+@inject ILogger<MainPage> Logger
 @rendermode InteractiveServer
 
 <PageTitle>PredatorWeb</PageTitle>
@@ -94,6 +96,14 @@
                             <div class="form-group">
                                 <button class="btn-primary" @onclick="OnLoginClick">Iniciar Sesión</button>
                             </div>
+                            @if (!string.IsNullOrEmpty(debugMessage))
+                            {
+                                <div class="form-group">
+                                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 4px; font-size: 12px;">
+                                        <strong>Debug:</strong> @debugMessage
+                                    </div>
+                                </div>
+                            }
                             <div class="form-group">
                                 <label>
                                     <input type="checkbox" @bind="rememberCredentials" />
@@ -138,6 +148,7 @@
     private bool isLoggedIn = false;
     private string? selectedModuleName = null;
     private bool showModulesDropdown = false;
+    private string debugMessage = "";
 
     protected override Task OnInitializedAsync()
     {
@@ -153,29 +164,52 @@
     {
         try
         {
+            debugMessage = "Iniciando login...";
+            Logger.LogInformation("=== INICIO DE LOGIN ===");
             isLoading = true;
             StateHasChanged();
 
-            menuItems = await MenuService.GetMenuItemsAsync();
-            isLoggedIn = true;
+            Logger.LogInformation("Iniciando carga de menú...");
+            debugMessage = "Cargando menú...";
+            StateHasChanged();
 
+            menuItems = await MenuService.GetMenuItemsAsync();
+            Logger.LogInformation($"Menú cargado: {menuItems.Count} items");
+            debugMessage = $"Menú cargado: {menuItems.Count} items";
+            StateHasChanged();
+
+            isLoggedIn = true;
             StateHasChanged();
 
             var ventasModule = menuItems.FirstOrDefault(m => m.Menu.Equals("Ventas", StringComparison.OrdinalIgnoreCase));
             if (ventasModule != null)
             {
+                Logger.LogInformation($"Módulo Ventas encontrado: {ventasModule.Menu}");
+                debugMessage = $"Módulo Ventas encontrado: {ventasModule.Menu}";
+                StateHasChanged();
                 await OnModuleSelected(ventasModule);
+            }
+            else
+            {
+                Logger.LogWarning("Módulo Ventas NO encontrado");
+                var modulosDisponibles = string.Join(", ", menuItems.Select(m => m.Menu));
+                Logger.LogInformation($"Módulos disponibles: {modulosDisponibles}");
+                debugMessage = $"Ventas NO encontrado. Disponibles: {modulosDisponibles}";
+                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error al cargar el menú: {ex.Message}");
+            Logger.LogError(ex, "ERROR al cargar el menú");
+            debugMessage = $"ERROR: {ex.Message}";
             menuItems = new List<Models.GrlMenu>();
+            StateHasChanged();
         }
         finally
         {
             isLoading = false;
             StateHasChanged();
+            Logger.LogInformation("=== FIN DE LOGIN ===");
         }
     }
 
@@ -196,7 +230,16 @@
 
     private void OnSubMenuItemClick(Models.GrlMenu subMenuItem)
     {
-        var existingTab = openTabs.FirstOrDefault(t => t.NombreEntidad == subMenuItem.NombreEntidad);
+        // Usar NombreEntidad directamente de GrlMenu para resolver la entidad
+        var entidad = !string.IsNullOrEmpty(subMenuItem.NombreEntidad) 
+            ? EntidadService.GetEntidad(subMenuItem.NombreEntidad) 
+            : null;
+
+        // Determinar los valores a usar
+        var nombreEntidad = entidad?.NombreEntidad ?? subMenuItem.NombreEntidad;
+        var titulo = entidad?.NombrePlural ?? subMenuItem.Menu;
+
+        var existingTab = openTabs.FirstOrDefault(t => t.NombreEntidad == nombreEntidad);
 
         if (existingTab != null)
         {
@@ -206,13 +249,13 @@
         {
             var newTab = new Models.ListaPage
             {
-                Title = subMenuItem.Menu,
-                NombreEntidad = subMenuItem.NombreEntidad,
+                Title = titulo,
+                NombreEntidad = nombreEntidad,
                 MenuId = subMenuItem.MenuId,
                 ComponentType = typeof(DynamicGridPage),
                 Parameters = new Dictionary<string, object>
                 {
-                    { "NombreEntidad", subMenuItem.NombreEntidad }
+                    { "NombreEntidad", nombreEntidad }
                 }
             };
 

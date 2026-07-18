@@ -6,11 +6,13 @@ namespace PredatorWeb.Services
     public class EntidadService
     {
         private readonly Datos _datos;
+        private readonly EntidadResolverService _entidadResolver;
         private readonly ILogger<EntidadService> _logger;
 
-        public EntidadService(Datos datos, ILogger<EntidadService> logger)
+        public EntidadService(Datos datos, EntidadResolverService entidadResolver, ILogger<EntidadService> logger)
         {
             _datos = datos;
+            _entidadResolver = entidadResolver;
             _logger = logger;
         }
 
@@ -18,7 +20,7 @@ namespace PredatorWeb.Services
         {
             _logger.LogInformation($"Intentando cargar datos para la entidad: '{nombreEntidad}'");
 
-            var entidad = GetEntidadByNombre(nombreEntidad);
+            var entidad = _entidadResolver.GetEntidadInstance(nombreEntidad);
             if (entidad == null)
             {
                 throw new InvalidOperationException($"No se encontró configuración para la entidad: '{nombreEntidad}'");
@@ -36,18 +38,12 @@ namespace PredatorWeb.Services
             return dataTable;
         }
 
-        private Entidad? GetEntidadByNombre(string nombreEntidad)
+        /// <summary>
+        /// Obtiene una instancia de la entidad por su nombre
+        /// </summary>
+        public Entidad? GetEntidad(string nombreEntidad)
         {
-            _logger.LogInformation($"Buscando mapeo para: '{nombreEntidad}'");
-
-            // Mapeo de entidades conocidas - más flexible con normalización
-            var normalized = nombreEntidad?.Trim().ToLower() ?? "";
-
-            return normalized switch
-            {
-                "comprobanteventa" or "comprobantes" or "comprobante" or "comprobantesventa" or "comprobanteventas" => new Entidades.Ventas.ComprobanteVenta(),
-                _ => null
-            };
+            return _entidadResolver.GetEntidadInstance(nombreEntidad);
         }
     }
 }

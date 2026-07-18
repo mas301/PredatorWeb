@@ -9,6 +9,7 @@
             NombreProcedimiento="VenComprobantesMantenimimento";
             NombreVista= "VenComprobanteVistaLista";
             NombreClavePrimaria= "ComprobanteId";
+            NombrePlural = "Comprobantes";
             Tipo = TipoEntidad.Maestro;
         }
     }

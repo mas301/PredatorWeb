@@ -10,6 +10,9 @@ builder.Services.AddRazorComponents()
 // Register data access layer
 builder.Services.AddScoped<Datos>();
 
+// Register entity resolver (singleton for caching)
+builder.Services.AddSingleton<EntidadResolverService>();
+
 // Register services
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<EntidadService>();

@@ -13,6 +13,7 @@
         public string NombreVista { get; set; }
         public string NombreProcedimiento { get; set; }
         public string NombreClavePrimaria { get; set; }
+        public string NombrePlural { get; set; }
         public TipoEntidad Tipo { get; set; }
     }
 }
