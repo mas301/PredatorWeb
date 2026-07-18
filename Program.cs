@@ -1,4 +1,5 @@
 ﻿using PredatorWeb.Components;
+using PredatorWeb.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,9 @@ builder.Services.AddDevExpressBlazor(options =>
     options.SizeMode = DevExpress.Blazor.SizeMode.Medium;
 });
 builder.Services.AddMvc();
+
+// Register MenuService
+builder.Services.AddScoped<MenuService>();
 
 var app = builder.Build();
 

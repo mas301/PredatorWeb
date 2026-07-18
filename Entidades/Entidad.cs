@@ -1,0 +1,18 @@
+﻿namespace PredatorWeb.Entidades
+{
+    public enum TipoEntidad
+    {
+        Maestro,
+        Documento
+    }
+
+    public class Entidad
+    {
+        public string NombreEntidad { get; set; }
+        public string NombreTabla { get; set; }
+        public string NombreVista { get; set; }
+        public string NombreProcedimento { get; set; }
+        public string NombreClavePrimaria { get; set; }
+        public TipoEntidad Tipo { get; set; }
+    }
+}

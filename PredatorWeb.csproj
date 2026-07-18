@@ -4,12 +4,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="DevExpress.Blazor" Version="26.1.*" />
+    <Compile Remove="Components\Pages\Index\**" />
+    <Content Remove="Components\Pages\Index\**" />
+    <EmbeddedResource Remove="Components\Pages\Index\**" />
+    <None Remove="Components\Pages\Index\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Components\Pages\Index\" />
+    <PackageReference Include="DevExpress.Blazor" Version="26.1.*" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
   </ItemGroup>
 </Project>
