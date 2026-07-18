@@ -5,8 +5,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    @DxResourceManager.RegisterTheme(ActiveTheme)
-    @DxResourceManager.RegisterScripts()
     <link href="@Assets["css/site.css"]" rel="stylesheet" />
     <link href="@Assets["PredatorWeb.styles.css"]" rel="stylesheet" />
     <ImportMap />
@@ -18,9 +16,3 @@
 </body>
 </html>
 
-@code {
-    static readonly ITheme ActiveTheme = Themes.Fluent.Clone(properties => {
-        properties.Mode = ThemeMode.Light;
-    });
-
-}

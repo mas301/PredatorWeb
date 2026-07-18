@@ -7,155 +7,121 @@
 <PageTitle>PredatorWeb</PageTitle>
 
 <div class="main-page-container">
-    <div class="top-menu">
-        <DxMenu Orientation="Orientation.Horizontal" 
-                CssClass="horizontal-menu">
-            <Items>
-                @if (!isLoggedIn)
+    <nav class="top-menu">
+        <ul class="menu-horizontal">
+            @if (!isLoggedIn)
+            {
+                <li class="menu-item">ERP Predator</li>
+            }
+            else if (isLoading)
+            {
+                <li class="menu-item">Cargando menú...</li>
+            }
+            else if (menuItems.Count == 0)
+            {
+                <li class="menu-item">Sin opciones de menú</li>
+            }
+            else
+            {
+                <li class="menu-item dropdown">
+                    <button class="menu-button" @onclick="ToggleModulesDropdown">
+                        @(selectedModuleName ?? "Modulos") ▼
+                    </button>
+                    @if (showModulesDropdown)
+                    {
+                        <ul class="dropdown-menu">
+                            @foreach (var menuItem in menuItems)
+                            {
+                                <li>
+                                    <button class="dropdown-item" @onclick="@(async () => await OnModuleSelected(menuItem))">
+                                        @menuItem.Menu
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </li>
+
+                @foreach (var subMenuItem in subMenuItems)
                 {
-                    <DxMenuItem>
-                        <Template>
-                            <span class="custom-menu-item">ERP Predator</span>
-                        </Template>
-                    </DxMenuItem>
+                    <li class="menu-item">
+                        <button class="menu-button" @onclick="@(() => OnSubMenuItemClick(subMenuItem))">
+                            @subMenuItem.Menu
+                        </button>
+                    </li>
                 }
-                else if (isLoading)
+            }
+        </ul>
+    </nav>
+
+    <div class="tab-container">
+        <div class="tabs">
+            <div class="tab-headers">
+                <button class="tab-header @(activeTabIndex == 0 ? "active" : "")" 
+                        @onclick="@(() => activeTabIndex = 0)">
+                    Login
+                </button>
+
+                @for (int i = 0; i < openTabs.Count; i++)
                 {
-                    <DxMenuItem>
-                        <Template>
-                            <span class="custom-menu-item">Cargando menú...</span>
-                        </Template>
-                    </DxMenuItem>
+                    var index = i;
+                    var tab = openTabs[i];
+                    <button class="tab-header @(activeTabIndex == index + 1 ? "active" : "")" 
+                            @onclick="@(() => activeTabIndex = index + 1)">
+                        @tab.Title
+                        <span class="tab-close" @onclick="@(e => OnTabClose(e, tab))" @onclick:stopPropagation="true">✕</span>
+                    </button>
                 }
-                else if (menuItems.Count == 0)
+            </div>
+
+            <div class="tab-content">
+                @if (activeTabIndex == 0)
                 {
-                    <DxMenuItem>
-                        <Template>
-                            <span class="custom-menu-item">Sin opciones de menú</span>
-                        </Template>
-                    </DxMenuItem>
+                    <div class="login-content">
+                        <div class="login-form">
+                            <div class="form-group">
+                                <label>Código de Empresa:</label>
+                                <input type="text" class="form-control" @bind="companyCode" placeholder="Ingrese el código de empresa" />
+                            </div>
+                            <div class="form-group">
+                                <label>Usuario:</label>
+                                <input type="text" class="form-control" @bind="username" placeholder="Ingrese su usuario" />
+                            </div>
+                            <div class="form-group">
+                                <label>Contraseña:</label>
+                                <input type="password" class="form-control" @bind="password" placeholder="Ingrese su contraseña" />
+                            </div>
+                            <div class="form-group">
+                                <button class="btn-primary" @onclick="OnLoginClick">Iniciar Sesión</button>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" @bind="rememberCredentials" />
+                                    Recordar Credenciales
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 }
                 else
                 {
-                    <DxMenuItem Text="@(selectedModuleName ?? "Modulos")">
-                        <Items>
-                            @foreach (var menuItem in menuItems)
-                            {
-                                <DxMenuItem Text="@menuItem.Menu" 
-                                           Click="@(() => OnModuleSelected(menuItem))"></DxMenuItem>
-                            }
-                        </Items>
-                    </DxMenuItem>
-
-                    @if (subMenuItems.Count > 0)
+                    var currentTab = openTabs[activeTabIndex - 1];
+                    @if (currentTab.ComponentType != null)
                     {
-                        @foreach (var subMenuItem in subMenuItems)
-                        {
-                            <DxMenuItem Click="@(() => OnSubMenuItemClick(subMenuItem))">
-                                <Template>
-                                    <span class="custom-menu-item">@subMenuItem.Menu</span>
-                                </Template>
-                            </DxMenuItem>
-                        }
+                        <DynamicComponent Type="@currentTab.ComponentType" 
+                                        Parameters="@(currentTab.Parameters ?? new Dictionary<string, object>())" />
+                    }
+                    else
+                    {
+                        <div style="padding: 20px;">
+                            <h3>@currentTab.Title</h3>
+                            <p>Contenido de @currentTab.Title</p>
+                            <p>NombreEntidad: @currentTab.NombreEntidad</p>
+                        </div>
                     }
                 }
-            </Items>
-        </DxMenu>
-    </div>
-
-    <div class="tab-container">
-        <DxTabs CssClass="tabs" 
-                @bind-ActiveTabIndex="@activeTabIndex">
-            <!-- Pestaña Login siempre visible sin botón de cierre -->
-            <DxTabPage Text="Login" 
-                       CssClass="login-tab">
-                <ChildContent>
-                    <div class="login-content">
-                        <DxFormLayout CssClass="login-form">
-                            <DxFormLayoutGroup ColSpanMd="12">
-                                <Items>
-                                    <DxFormLayoutItem Caption="Código de Empresa:" 
-                                                     ColSpanMd="12"
-                                                     CaptionPosition="CaptionPosition.Vertical">
-                                        <Template>
-                                            <DxTextBox @bind-Text="@companyCode" 
-                                                      CssClass="login-textbox"
-                                                      NullText="Ingrese el código de empresa" />
-                                        </Template>
-                                    </DxFormLayoutItem>
-                                    <DxFormLayoutItem Caption="Usuario:" 
-                                                     ColSpanMd="12"
-                                                     CaptionPosition="CaptionPosition.Vertical">
-                                        <Template>
-                                            <DxTextBox @bind-Text="@username" 
-                                                      CssClass="login-textbox"
-                                                      NullText="Ingrese su usuario" />
-                                        </Template>
-                                    </DxFormLayoutItem>
-                                    <DxFormLayoutItem Caption="Contraseña:" 
-                                                     ColSpanMd="12"
-                                                     CaptionPosition="CaptionPosition.Vertical">
-                                        <Template>
-                                            <DxTextBox @bind-Text="@password" 
-                                                      Password="true"
-                                                      CssClass="login-textbox"
-                                                      NullText="Ingrese su contraseña" />
-                                        </Template>
-                                    </DxFormLayoutItem>
-                                    <DxFormLayoutItem ColSpanMd="12" 
-                                                     CssClass="button-item">
-                                        <Template>
-                                            <div style="display: flex; justify-content: center; width: 100%;">
-                                                <DxButton Text="Iniciar Sesión" 
-                                                         RenderStyle="ButtonRenderStyle.Primary" 
-                                                         Click="OnLoginClick"
-                                                         CssClass="login-button" />
-                                            </div>
-                                        </Template>
-                                    </DxFormLayoutItem>
-                                    <DxFormLayoutItem Caption="Recordar Credenciales" ColSpanMd="12" 
-                                                     CssClass="checkbox-item">
-                                        <Template>
-                                            <DxCheckBox @bind-Checked="@rememberCredentials" 
-                                                       CssClass="remember-checkbox" />
-                                        </Template>
-                                    </DxFormLayoutItem>
-                                </Items>
-                            </DxFormLayoutGroup>
-                        </DxFormLayout>
-                    </div>
-                </ChildContent>
-            </DxTabPage>
-
-            @foreach (var tab in openTabs)
-            {
-                <DxTabPage CssClass="dynamic-tab-page">
-                    <TextTemplate>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span>@tab.Title</span>
-                            <span @onclick="@(() => CloseTab(tab))" 
-                                  style="cursor: pointer; font-weight: bold; padding: 2px 6px; margin-left: 8px;"
-                                  title="Cerrar">✕</span>
-                        </div>
-                    </TextTemplate>
-                    <ChildContent>
-                        @if (tab.ComponentType != null)
-                        {
-                            <DynamicComponent Type="@tab.ComponentType" 
-                                            Parameters="@(tab.Parameters ?? new Dictionary<string, object>())" />
-                        }
-                        else
-                        {
-                            <div style="padding: 20px;">
-                                <h3>@tab.Title</h3>
-                                <p>Contenido de @tab.Title</p>
-                                <p>NombreEntidad: @tab.NombreEntidad</p>
-                            </div>
-                        }
-                    </ChildContent>
-                </DxTabPage>
-            }
-        </DxTabs>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -171,10 +137,16 @@
     private bool isLoading = false;
     private bool isLoggedIn = false;
     private string? selectedModuleName = null;
+    private bool showModulesDropdown = false;
 
     protected override Task OnInitializedAsync()
     {
         return Task.CompletedTask;
+    }
+
+    private void ToggleModulesDropdown()
+    {
+        showModulesDropdown = !showModulesDropdown;
     }
 
     private async Task OnLoginClick()
@@ -182,10 +154,13 @@
         try
         {
             isLoading = true;
+            StateHasChanged();
+
             menuItems = await MenuService.GetMenuItemsAsync();
             isLoggedIn = true;
 
-            // Cargar automáticamente el módulo "Ventas"
+            StateHasChanged();
+
             var ventasModule = menuItems.FirstOrDefault(m => m.Menu.Equals("Ventas", StringComparison.OrdinalIgnoreCase));
             if (ventasModule != null)
             {
@@ -200,6 +175,7 @@
         finally
         {
             isLoading = false;
+            StateHasChanged();
         }
     }
 
@@ -209,6 +185,7 @@
         {
             selectedModuleName = module.Menu;
             subMenuItems = await MenuService.GetSubMenuItemsAsync(module.MenuId);
+            showModulesDropdown = false;
         }
         catch (Exception ex)
         {
@@ -232,7 +209,7 @@
                 Title = subMenuItem.Menu,
                 NombreEntidad = subMenuItem.NombreEntidad,
                 MenuId = subMenuItem.MenuId,
-                ComponentType = typeof(GridPage),
+                ComponentType = typeof(DynamicGridPage),
                 Parameters = new Dictionary<string, object>
                 {
                     { "NombreEntidad", subMenuItem.NombreEntidad }
@@ -242,6 +219,11 @@
             openTabs.Add(newTab);
             activeTabIndex = openTabs.Count;
         }
+    }
+
+    private void OnTabClose(MouseEventArgs e, Models.ListaPage tab)
+    {
+        CloseTab(tab);
     }
 
     private void CloseTab(Models.ListaPage tab)

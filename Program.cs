@@ -7,14 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddDevExpressBlazor(options =>
-{
-    options.SizeMode = DevExpress.Blazor.SizeMode.Medium;
-});
-builder.Services.AddMvc();
+// Register data access layer
+builder.Services.AddScoped<Datos>();
 
-// Register MenuService
+// Register services
 builder.Services.AddScoped<MenuService>();
+builder.Services.AddScoped<EntidadService>();
 
 var app = builder.Build();
 

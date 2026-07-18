@@ -5,16 +5,15 @@ namespace PredatorWeb.Services;
 
 public class MenuService
 {
-    private readonly string _connectionString;
+    private readonly Datos _datos;
     private readonly ILogger<MenuService> _logger;
 
-    public MenuService(IConfiguration configuration, ILogger<MenuService> logger)
+    public MenuService(Datos datos, ILogger<MenuService> logger)
     {
-        _connectionString = configuration.GetConnectionString("DLK") 
-            ?? "Data Source=caleb.pe;Initial Catalog=DLK;User Id=sagesnet;Password=D0br@nOc;TrustServerCertificate=True;Encrypt=True;";
+        _datos = datos;
         _logger = logger;
 
-        _logger.LogInformation($"MenuService inicializado con connection string: {MaskConnectionString(_connectionString)}");
+        _logger.LogInformation("MenuService inicializado");
     }
 
     public async Task<List<GrlMenu>> GetMenuItemsAsync()
@@ -25,7 +24,7 @@ public class MenuService
         {
             _logger.LogInformation("Intentando conectar a la base de datos...");
 
-            using (var connection = new SqlConnection(_connectionString))
+            using (var connection = _datos.CreateConnection())
             {
                 await connection.OpenAsync();
                 _logger.LogInformation("Conexión establecida exitosamente");
@@ -37,27 +36,24 @@ public class MenuService
 
                 _logger.LogInformation($"Ejecutando query: {query}");
 
-                using (var command = new SqlCommand(query, connection))
+                using (var reader = await _datos.ExecuteReaderAsync(query, connection))
                 {
-                    using (var reader = await command.ExecuteReaderAsync())
+                    while (await reader.ReadAsync())
                     {
-                        while (await reader.ReadAsync())
+                        var menu = new GrlMenu
                         {
-                            var menu = new GrlMenu
-                            {
-                                MenuId = reader.GetInt32(reader.GetOrdinal("MenuId")),
-                                MenuGrupalId = reader.IsDBNull(reader.GetOrdinal("MenuGrupalId")) 
-                                    ? null 
-                                    : reader.GetInt32(reader.GetOrdinal("MenuGrupalId")),
-                                Menu = reader.GetString(reader.GetOrdinal("Menu")),
-                                NombreEntidad = reader.GetString(reader.GetOrdinal("NombreEntidad")),
-                                CodigoMenu = reader.GetString(reader.GetOrdinal("CodigoMenu")),
-                                Abierto = reader.GetBoolean(reader.GetOrdinal("Abierto"))
-                            };
+                            MenuId = reader.GetInt32(reader.GetOrdinal("MenuId")),
+                            MenuGrupalId = reader.IsDBNull(reader.GetOrdinal("MenuGrupalId")) 
+                                ? null 
+                                : reader.GetInt32(reader.GetOrdinal("MenuGrupalId")),
+                            Menu = reader.GetString(reader.GetOrdinal("Menu")),
+                            NombreEntidad = reader.GetString(reader.GetOrdinal("NombreEntidad")),
+                            CodigoMenu = reader.GetString(reader.GetOrdinal("CodigoMenu")),
+                            Abierto = reader.GetBoolean(reader.GetOrdinal("Abierto"))
+                        };
 
-                            menuItems.Add(menu);
-                            _logger.LogInformation($"Menu item cargado: {menu.Menu} (Código: {menu.CodigoMenu})");
-                        }
+                        menuItems.Add(menu);
+                        _logger.LogInformation($"Menu item cargado: {menu.Menu} (Código: {menu.CodigoMenu})");
                     }
                 }
             }
@@ -81,7 +77,7 @@ public class MenuService
         {
             _logger.LogInformation($"Cargando submenús para MenuGrupalId: {menuGrupalId}");
 
-            using (var connection = new SqlConnection(_connectionString))
+            using (var connection = _datos.CreateConnection())
             {
                 await connection.OpenAsync();
 
@@ -90,29 +86,26 @@ public class MenuService
                              WHERE MenuGrupalId = @MenuGrupalId
                              ORDER BY CodigoMenu";
 
-                using (var command = new SqlCommand(query, connection))
+                var parameter = new SqlParameter("@MenuGrupalId", menuGrupalId);
+
+                using (var reader = await _datos.ExecuteReaderAsync(query, connection, parameter))
                 {
-                    command.Parameters.AddWithValue("@MenuGrupalId", menuGrupalId);
-
-                    using (var reader = await command.ExecuteReaderAsync())
+                    while (await reader.ReadAsync())
                     {
-                        while (await reader.ReadAsync())
+                        var menu = new GrlMenu
                         {
-                            var menu = new GrlMenu
-                            {
-                                MenuId = reader.GetInt32(reader.GetOrdinal("MenuId")),
-                                MenuGrupalId = reader.IsDBNull(reader.GetOrdinal("MenuGrupalId")) 
-                                    ? null 
-                                    : reader.GetInt32(reader.GetOrdinal("MenuGrupalId")),
-                                Menu = reader.GetString(reader.GetOrdinal("Menu")),
-                                NombreEntidad = reader.GetString(reader.GetOrdinal("NombreEntidad")),
-                                CodigoMenu = reader.GetString(reader.GetOrdinal("CodigoMenu")),
-                                Abierto = reader.GetBoolean(reader.GetOrdinal("Abierto"))
-                            };
+                            MenuId = reader.GetInt32(reader.GetOrdinal("MenuId")),
+                            MenuGrupalId = reader.IsDBNull(reader.GetOrdinal("MenuGrupalId")) 
+                                ? null 
+                                : reader.GetInt32(reader.GetOrdinal("MenuGrupalId")),
+                            Menu = reader.GetString(reader.GetOrdinal("Menu")),
+                            NombreEntidad = reader.GetString(reader.GetOrdinal("NombreEntidad")),
+                            CodigoMenu = reader.GetString(reader.GetOrdinal("CodigoMenu")),
+                            Abierto = reader.GetBoolean(reader.GetOrdinal("Abierto"))
+                        };
 
-                            subMenuItems.Add(menu);
-                            _logger.LogInformation($"Submenu item cargado: {menu.Menu} (Código: {menu.CodigoMenu})");
-                        }
+                        subMenuItems.Add(menu);
+                        _logger.LogInformation($"Submenu item cargado: {menu.Menu} (Código: {menu.CodigoMenu})");
                     }
                 }
             }
@@ -126,14 +119,5 @@ public class MenuService
         }
 
         return subMenuItems;
-    }
-
-    private string MaskConnectionString(string connectionString)
-    {
-        // Ocultar la contraseña para el log
-        return System.Text.RegularExpressions.Regex.Replace(
-            connectionString, 
-            @"Password=([^;]+)", 
-            "Password=***");
     }
 }

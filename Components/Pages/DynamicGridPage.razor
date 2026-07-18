@@ -1,0 +1,197 @@
+@using System.Data
+@inject Services.EntidadService EntidadService
+
+<div class="grid-container">
+    @if (errorMessage != null)
+    {
+        <div class="error-message">
+            <h3>Error al cargar datos:</h3>
+            <p>@errorMessage</p>
+            @if (stackTrace != null)
+            {
+                <details>
+                    <summary>Detalles del error</summary>
+                    <pre>@stackTrace</pre>
+                </details>
+            }
+        </div>
+    }
+    else if (isLoading)
+    {
+        <div class="loading-message">
+            <p>Cargando datos para: @NombreEntidad...</p>
+        </div>
+    }
+    else if (gridData != null && gridData.Rows.Count > 0)
+    {
+        <div class="grid-controls">
+            <div class="pagination-info">
+                Mostrando @((currentPage - 1) * pageSize + 1) - @Math.Min(currentPage * pageSize, totalRecords) de @totalRecords registros
+            </div>
+            <div class="pagination-controls">
+                <button class="btn-page" @onclick="FirstPage" disabled="@(currentPage == 1)">⏮️</button>
+                <button class="btn-page" @onclick="PreviousPage" disabled="@(currentPage == 1)">◀️</button>
+                <span class="page-info">Página @currentPage de @totalPages</span>
+                <button class="btn-page" @onclick="NextPage" disabled="@(currentPage == totalPages)">▶️</button>
+                <button class="btn-page" @onclick="LastPage" disabled="@(currentPage == totalPages)">⏭️</button>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        @foreach (DataColumn column in gridData.Columns)
+                        {
+                            <th @onclick="@(() => SortByColumn(column.ColumnName))">
+                                @column.ColumnName
+                                @if (sortColumn == column.ColumnName)
+                                {
+                                    <span>@(sortAscending ? "▲" : "▼")</span>
+                                }
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (DataRow row in GetPagedData())
+                    {
+                        <tr>
+                            @foreach (DataColumn column in gridData.Columns)
+                            {
+                                <td>@(row[column] ?? "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="no-data-message">
+            <p>No se encontraron datos para mostrar.</p>
+            <p>Entidad: @NombreEntidad</p>
+            <p>Datos cargados: @(gridData?.Rows.Count ?? 0) registros</p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? NombreEntidad { get; set; }
+
+    private DataTable? gridData;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? stackTrace;
+
+    // Paginación
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private int totalRecords = 0;
+    private int totalPages = 0;
+
+    // Ordenamiento
+    private string? sortColumn;
+    private bool sortAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(NombreEntidad))
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (string.IsNullOrEmpty(NombreEntidad))
+            return;
+
+        isLoading = true;
+        errorMessage = null;
+        stackTrace = null;
+
+        try
+        {
+            gridData = await EntidadService.GetEntidadDataAsync(NombreEntidad);
+            totalRecords = gridData?.Rows.Count ?? 0;
+            totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
+            currentPage = 1;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            stackTrace = ex.StackTrace;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IEnumerable<DataRow> GetPagedData()
+    {
+        if (gridData == null) return Enumerable.Empty<DataRow>();
+
+        var rows = gridData.AsEnumerable();
+
+        // Aplicar ordenamiento
+        if (!string.IsNullOrEmpty(sortColumn))
+        {
+            rows = sortAscending 
+                ? rows.OrderBy(r => r[sortColumn]) 
+                : rows.OrderByDescending(r => r[sortColumn]);
+        }
+
+        // Aplicar paginación
+        return rows
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize);
+    }
+
+    private void SortByColumn(string columnName)
+    {
+        if (sortColumn == columnName)
+        {
+            sortAscending = !sortAscending;
+        }
+        else
+        {
+            sortColumn = columnName;
+            sortAscending = true;
+        }
+    }
+
+    private void FirstPage()
+    {
+        currentPage = 1;
+    }
+
+    private void PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+        }
+    }
+
+    private void LastPage()
+    {
+        currentPage = totalPages;
+    }
+}
