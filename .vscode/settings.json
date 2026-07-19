@@ -1,0 +1,7 @@
+{
+  "dotnet.defaultSolution": "PredatorWeb.slnx",
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  }
+}
