@@ -305,10 +305,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(NombreEntidad))
-        {
-            await LoadDataAsync();
-        }
+        await LoadDataAsync();
     }
 
     private async Task LoadDataAsync()

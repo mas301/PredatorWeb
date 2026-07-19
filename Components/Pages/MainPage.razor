@@ -77,8 +77,8 @@
             </div>
 
             <div class="tab-content">
-                @if (activeTabIndex == 0)
-                {
+                <!-- Pestaña de inicio de sesión (siempre presente) -->
+                <div style="display: @(activeTabIndex == 0 ? "block" : "none")">
                     <div class="login-content">
                         <div class="login-form">
                             <div class="form-group">
@@ -112,23 +112,31 @@
                             </div>
                         </div>
                     </div>
-                }
-                else
+                </div>
+
+                <!-- Pestañas de entidades (renderizadas todas, pero ocultas con CSS) -->
+                @for (int i = 0; i < openTabs.Count; i++)
                 {
-                    var currentTab = openTabs[activeTabIndex - 1];
-                    @if (currentTab.ComponentType != null)
-                    {
-                        <DynamicComponent Type="@currentTab.ComponentType" 
-                                        Parameters="@(currentTab.Parameters ?? new Dictionary<string, object>())" />
-                    }
-                    else
-                    {
-                        <div style="padding: 20px;">
-                            <h3>@currentTab.Title</h3>
-                            <p>Contenido de @currentTab.Title</p>
-                            <p>NombreEntidad: @currentTab.NombreEntidad</p>
-                        </div>
-                    }
+                    var tabIndex = i;
+                    var tab = openTabs[tabIndex];
+                    var isActive = activeTabIndex == tabIndex + 1;
+
+                    <div style="display: @(isActive ? "flex" : "none"); flex-direction: column; height: 100%; overflow: hidden;">
+                        @if (tab.ComponentType != null)
+                        {
+                            <DynamicComponent Type="@tab.ComponentType" 
+                                            Parameters="@(tab.Parameters ?? new Dictionary<string, object>())"
+                                            @key="@tab.NombreEntidad" />
+                        }
+                        else
+                        {
+                            <div style="padding: 20px;">
+                                <h3>@tab.Title</h3>
+                                <p>Contenido de @tab.Title</p>
+                                <p>NombreEntidad: @tab.NombreEntidad</p>
+                            </div>
+                        }
+                    </div>
                 }
             </div>
         </div>

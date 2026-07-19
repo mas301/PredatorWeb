@@ -166,9 +166,12 @@ html, body {
 
 .tab-content {
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
     background-color: white;
     padding: 2px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 /* Login form */
@@ -250,8 +253,10 @@ input[type="checkbox"] {
     display: flex;
     flex-direction: column;
     height: 100%;
+    max-height: 100%;
     padding: 0;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .error-message {
@@ -392,6 +397,7 @@ input[type="checkbox"] {
     border-bottom: 1px solid #dee2e6;
     flex-wrap: wrap;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .toolbar-btn {
@@ -460,6 +466,7 @@ input[type="checkbox"] {
     padding: 10px;
     background-color: #fff9e6;
     border-bottom: 1px solid #ffe599;
+    flex-shrink: 0;
 }
 
 .btn-clear-all-filters {
@@ -551,10 +558,12 @@ input[type="checkbox"] {
 }
 
 .table-wrapper {
-    flex: 1;
-    overflow: auto;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: auto;
     border-left: 1px solid #ddd;
     border-right: 1px solid #ddd;
+    min-height: 0;
 }
 
 .data-grid {
