@@ -24,17 +24,59 @@
     }
     else if (gridData != null && gridData.Rows.Count > 0)
     {
-        <div class="grid-controls">
-            <div class="pagination-info">
-                Mostrando @((currentPage - 1) * pageSize + 1) - @Math.Min(currentPage * pageSize, totalRecords) de @totalRecords registros
-            </div>
-            <div class="pagination-controls">
-                <button class="btn-page" @onclick="FirstPage" disabled="@(currentPage == 1)">⏮️</button>
-                <button class="btn-page" @onclick="PreviousPage" disabled="@(currentPage == 1)">◀️</button>
-                <span class="page-info">Página @currentPage de @totalPages</span>
-                <button class="btn-page" @onclick="NextPage" disabled="@(currentPage == totalPages)">▶️</button>
-                <button class="btn-page" @onclick="LastPage" disabled="@(currentPage == totalPages)">⏭️</button>
-            </div>
+        <!-- Barra de herramientas -->
+        <div class="toolbar">
+            <button class="toolbar-btn" @onclick="OnIngresar" title="Ingresar">
+                <span class="btn-icon">➕</span>
+                <span class="btn-text">Ingresar</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnModificar" disabled="@(!CanModify())" title="Modificar">
+                <span class="btn-icon">✏️</span>
+                <span class="btn-text">Modificar</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnConsultar" disabled="@(!CanConsult())" title="Consultar">
+                <span class="btn-icon">👁️</span>
+                <span class="btn-text">Consultar</span>
+            </button>
+            <div class="toolbar-separator"></div>
+            <button class="toolbar-btn" @onclick="OnDesactivar" disabled="@(!CanDeactivate())" title="Desactivar">
+                <span class="btn-icon">🚫</span>
+                <span class="btn-text">Desactivar</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnReactivar" disabled="@(!CanReactivate())" title="Reactivar">
+                <span class="btn-icon">✅</span>
+                <span class="btn-text">Reactivar</span>
+            </button>
+            <button class="toolbar-btn toolbar-btn-danger" @onclick="OnEliminar" disabled="@(!CanDelete())" title="Eliminar">
+                <span class="btn-icon">🗑️</span>
+                <span class="btn-text">Eliminar</span>
+            </button>
+            <div class="toolbar-separator"></div>
+            <button class="toolbar-btn" @onclick="OnImprimir" title="Imprimir">
+                <span class="btn-icon">🖨️</span>
+                <span class="btn-text">Imprimir</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnImportar" title="Importar">
+                <span class="btn-icon">📥</span>
+                <span class="btn-text">Importar</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnExportar" title="Exportar">
+                <span class="btn-icon">📤</span>
+                <span class="btn-text">Exportar</span>
+            </button>
+            <div class="toolbar-separator"></div>
+            <button class="toolbar-btn" @onclick="OnRefrescar" title="Refrescar">
+                <span class="btn-icon">🔄</span>
+                <span class="btn-text">Refrescar</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnColumnas" title="Columnas">
+                <span class="btn-icon">📋</span>
+                <span class="btn-text">Columnas</span>
+            </button>
+            <button class="toolbar-btn" @onclick="OnPropiedades" title="Propiedades">
+                <span class="btn-icon">⚙️</span>
+                <span class="btn-text">Propied</span>
+            </button>
         </div>
 
         <div class="table-wrapper">
@@ -50,7 +92,7 @@
                         {
                             @if (!ShouldHideColumn(column.ColumnName))
                             {
-                                <th @onclick="@(() => SortByColumn(column.ColumnName))" class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                <th @onclick="@(() => ShowSortDialog(column.ColumnName))" class="@(IsNumericColumn(column) ? "text-right" : "")">
                                     @FormatColumnName(column.ColumnName)
                                     @if (sortColumn == column.ColumnName)
                                     {
@@ -64,8 +106,10 @@
                 <tbody>
                     @foreach (DataRow row in GetPagedData())
                     {
-                        <tr class="@(IsRowSelected(row) ? "row-selected" : "")">
-                            <td class="checkbox-column">
+                        <tr class="@(IsRowSelected(row) ? "row-selected" : "")" 
+                            @onclick="@(() => SelectSingleRow(row))" 
+                            style="cursor: pointer;">
+                            <td class="checkbox-column" @onclick:stopPropagation="true">
                                 <input type="checkbox"
                                        checked="@IsRowSelected(row)"
                                        @onchange="@(e => ToggleRowSelection(row, e))" />
@@ -75,7 +119,17 @@
                                 @if (!ShouldHideColumn(column.ColumnName))
                                 {
                                     <td class="@(IsNumericColumn(column) ? "text-right" : "")">
-                                        @FormatCellValue(row[column], column)
+                                        @if (IsBooleanColumn(column))
+                                        {
+                                            <input type="checkbox" 
+                                                   checked="@GetBooleanValue(row[column])" 
+                                                   disabled 
+                                                   style="cursor: default;" />
+                                        }
+                                        else
+                                        {
+                                            @FormatCellValue(row[column], column)
+                                        }
                                     </td>
                                 }
                             }
@@ -83,6 +137,20 @@
                     }
                 </tbody>
             </table>
+        </div>
+
+        <!-- Paginación en el pie -->
+        <div class="grid-footer">
+            <div class="pagination-info">
+                Mostrando @((currentPage - 1) * pageSize + 1) - @Math.Min(currentPage * pageSize, totalRecords) de @totalRecords registros
+            </div>
+            <div class="pagination-controls">
+                <button class="btn-page" @onclick="FirstPage" disabled="@(currentPage == 1)">⏮️</button>
+                <button class="btn-page" @onclick="PreviousPage" disabled="@(currentPage == 1)">◀️</button>
+                <span class="page-info">Página @currentPage de @totalPages</span>
+                <button class="btn-page" @onclick="NextPage" disabled="@(currentPage == totalPages)">▶️</button>
+                <button class="btn-page" @onclick="LastPage" disabled="@(currentPage == totalPages)">⏭️</button>
+            </div>
         </div>
     }
     else
@@ -93,9 +161,113 @@
             <p>Datos cargados: @(gridData?.Rows.Count ?? 0) registros</p>
         </div>
     }
+
+    <!-- Diálogo de ordenamiento -->
+    @if (showSortDialog)
+    {
+        <div class="modal-overlay" @onclick="CancelSort">
+            <div class="modal-dialog" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h3>Ordenar y Filtrar: @FormatColumnName(selectedColumnForSort ?? "")</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="sort-section">
+                        <h4>Ordenamiento</h4>
+                        <div class="sort-options">
+                            <label>
+                                <input type="radio" name="sortOrder" value="asc" checked="@tempSortAscending" @onchange="@(() => tempSortAscending = true)" />
+                                Ascendente (A-Z, 0-9)
+                            </label>
+                            <label>
+                                <input type="radio" name="sortOrder" value="desc" checked="@(!tempSortAscending)" @onchange="@(() => tempSortAscending = false)" />
+                                Descendente (Z-A, 9-0)
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (IsSelectedColumnString())
+                    {
+                        <div class="filter-section">
+                            <h4>Filtro de texto</h4>
+                            <input type="text" 
+                                   class="filter-input" 
+                                   placeholder="Ingrese texto para filtrar..." 
+                                   @bind="tempFilterValue" />
+                            @if (!string.IsNullOrEmpty(tempFilterValue))
+                            {
+                                <button class="btn-clear-filter" @onclick="ClearTempFilter">✖ Limpiar</button>
+                            }
+                        </div>
+                    }
+
+                    @if (IsSelectedColumnDate())
+                    {
+                        <div class="filter-section">
+                            <h4>Filtro de fecha</h4>
+                            <select class="date-filter-select" @bind="tempDateFilterType" @bind:after="OnDateFilterTypeChanged">
+                                <option value="@DateFilterType.None">Sin filtro</option>
+                                <option value="@DateFilterType.Today">Hoy</option>
+                                <option value="@DateFilterType.ThisWeek">Esta Semana</option>
+                                <option value="@DateFilterType.ThisMonth">Este Mes</option>
+                                <option value="@DateFilterType.ThisYear">Este Año</option>
+                                <option value="@DateFilterType.CustomRange">Rango de fechas</option>
+                            </select>
+
+                            @if (tempDateFilterType == DateFilterType.CustomRange)
+                            {
+                                <div class="date-range-inputs">
+                                    <div class="date-input-group">
+                                        <label>Desde:</label>
+                                        <input type="date" class="date-input" @bind="tempDateFrom" />
+                                    </div>
+                                    <div class="date-input-group">
+                                        <label>Hasta:</label>
+                                        <input type="date" class="date-input" @bind="tempDateTo" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (IsSelectedColumnBoolean())
+                    {
+                        <div class="filter-section">
+                            <h4>Filtro de checkbox</h4>
+                            <select class="boolean-filter-select" @bind="tempBooleanFilterType">
+                                <option value="@BooleanFilterType.All">Todas</option>
+                                <option value="@BooleanFilterType.Checked">Solo con check (✓)</option>
+                                <option value="@BooleanFilterType.Unchecked">Solo sin check</option>
+                            </select>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-modal btn-cancel" @onclick="CancelSort">Cancelar</button>
+                    <button class="btn-modal btn-accept" @onclick="AcceptSort">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
+    public enum DateFilterType
+    {
+        None,
+        Today,
+        ThisWeek,
+        ThisMonth,
+        ThisYear,
+        CustomRange
+    }
+
+    public enum BooleanFilterType
+    {
+        All,
+        Checked,
+        Unchecked
+    }
+
     [Parameter]
     public string? NombreEntidad { get; set; }
 
@@ -113,6 +285,25 @@
     // Ordenamiento
     private string? sortColumn;
     private bool sortAscending = true;
+
+    // Diálogo de ordenamiento y filtrado
+    private bool showSortDialog = false;
+    private string? selectedColumnForSort;
+    private bool tempSortAscending = true;
+    private string tempFilterValue = "";
+
+    // Filtrado de fechas
+    private DateFilterType tempDateFilterType = DateFilterType.None;
+    private DateTime? tempDateFrom;
+    private DateTime? tempDateTo;
+
+    // Filtrado de booleanos
+    private BooleanFilterType tempBooleanFilterType = BooleanFilterType.All;
+
+    // Filtros activos por columna
+    private readonly Dictionary<string, string> columnFilters = new();
+    private readonly Dictionary<string, (DateFilterType Type, DateTime? From, DateTime? To)> dateFilters = new();
+    private readonly Dictionary<string, BooleanFilterType> booleanFilters = new();
 
     // Selección de filas
     private readonly HashSet<DataRow> selectedRows = new();
@@ -164,6 +355,48 @@
 
         var rows = gridData.AsEnumerable();
 
+        // Aplicar filtros de texto
+        foreach (var filter in columnFilters)
+        {
+            var columnName = filter.Key;
+            var filterValue = filter.Value;
+
+            if (!string.IsNullOrWhiteSpace(filterValue))
+            {
+                rows = rows.Where(r => 
+                {
+                    var cellValue = r[columnName];
+                    if (cellValue == null || cellValue == DBNull.Value)
+                        return false;
+                    return cellValue.ToString()?.Contains(filterValue, StringComparison.OrdinalIgnoreCase) ?? false;
+                });
+            }
+        }
+
+        // Aplicar filtros de fecha
+        foreach (var filter in dateFilters)
+        {
+            var columnName = filter.Key;
+            var dateFilter = filter.Value;
+
+            if (dateFilter.Type != DateFilterType.None)
+            {
+                rows = rows.Where(r => ApplyDateFilter(r[columnName], dateFilter));
+            }
+        }
+
+        // Aplicar filtros de booleanos
+        foreach (var filter in booleanFilters)
+        {
+            var columnName = filter.Key;
+            var booleanFilter = filter.Value;
+
+            if (booleanFilter != BooleanFilterType.All)
+            {
+                rows = rows.Where(r => ApplyBooleanFilter(r[columnName], booleanFilter));
+            }
+        }
+
         // Aplicar ordenamiento
         if (!string.IsNullOrEmpty(sortColumn))
         {
@@ -172,8 +405,13 @@
                 : rows.OrderByDescending(r => r[sortColumn]);
         }
 
+        // Calcular totales después del filtrado
+        var filteredRows = rows.ToList();
+        totalRecords = filteredRows.Count;
+        totalPages = (int)Math.Ceiling(totalRecords / (double)pageSize);
+
         // Aplicar paginación
-        return rows
+        return filteredRows
             .Skip((currentPage - 1) * pageSize)
             .Take(pageSize);
     }
@@ -189,6 +427,216 @@
             sortColumn = columnName;
             sortAscending = true;
         }
+    }
+
+    private void ShowSortDialog(string columnName)
+    {
+        selectedColumnForSort = columnName;
+        // Si la columna ya está ordenada, usar el mismo orden, sino ascendente por defecto
+        if (sortColumn == columnName)
+        {
+            tempSortAscending = sortAscending;
+        }
+        else
+        {
+            tempSortAscending = true;
+        }
+
+        // Cargar el filtro de texto existente para esta columna si existe
+        if (columnFilters.ContainsKey(columnName))
+        {
+            tempFilterValue = columnFilters[columnName];
+        }
+        else
+        {
+            tempFilterValue = "";
+        }
+
+        // Cargar el filtro de fecha existente para esta columna si existe
+        if (dateFilters.ContainsKey(columnName))
+        {
+            var dateFilter = dateFilters[columnName];
+            tempDateFilterType = dateFilter.Type;
+            tempDateFrom = dateFilter.From;
+            tempDateTo = dateFilter.To;
+        }
+        else
+        {
+            tempDateFilterType = DateFilterType.None;
+            tempDateFrom = null;
+            tempDateTo = null;
+        }
+
+        // Cargar el filtro booleano existente para esta columna si existe
+        if (booleanFilters.ContainsKey(columnName))
+        {
+            tempBooleanFilterType = booleanFilters[columnName];
+        }
+        else
+        {
+            tempBooleanFilterType = BooleanFilterType.All;
+        }
+
+        showSortDialog = true;
+    }
+
+    private void AcceptSort()
+    {
+        if (!string.IsNullOrEmpty(selectedColumnForSort))
+        {
+            sortColumn = selectedColumnForSort;
+            sortAscending = tempSortAscending;
+
+            // Guardar o eliminar el filtro según el valor
+            if (IsSelectedColumnString())
+            {
+                if (!string.IsNullOrWhiteSpace(tempFilterValue))
+                {
+                    columnFilters[selectedColumnForSort] = tempFilterValue;
+                }
+                else
+                {
+                    columnFilters.Remove(selectedColumnForSort);
+                }
+            }
+
+            // Guardar o eliminar el filtro de fecha
+            if (IsSelectedColumnDate())
+            {
+                if (tempDateFilterType != DateFilterType.None)
+                {
+                    dateFilters[selectedColumnForSort] = (tempDateFilterType, tempDateFrom, tempDateTo);
+                }
+                else
+                {
+                    dateFilters.Remove(selectedColumnForSort);
+                }
+            }
+
+            // Guardar o eliminar el filtro booleano
+            if (IsSelectedColumnBoolean())
+            {
+                if (tempBooleanFilterType != BooleanFilterType.All)
+                {
+                    booleanFilters[selectedColumnForSort] = tempBooleanFilterType;
+                }
+                else
+                {
+                    booleanFilters.Remove(selectedColumnForSort);
+                }
+            }
+
+            // Resetear a la primera página después de aplicar filtros
+            currentPage = 1;
+        }
+        showSortDialog = false;
+    }
+
+    private void CancelSort()
+    {
+        showSortDialog = false;
+    }
+
+    private bool IsSelectedColumnString()
+    {
+        if (gridData == null || string.IsNullOrEmpty(selectedColumnForSort))
+            return false;
+
+        var column = gridData.Columns[selectedColumnForSort];
+        return column != null && column.DataType == typeof(string);
+    }
+
+    private bool IsSelectedColumnDate()
+    {
+        if (gridData == null || string.IsNullOrEmpty(selectedColumnForSort))
+            return false;
+
+        var column = gridData.Columns[selectedColumnForSort];
+        return column != null && (column.DataType == typeof(DateTime) || column.DataType == typeof(DateTime?));
+    }
+
+    private bool IsSelectedColumnBoolean()
+    {
+        if (gridData == null || string.IsNullOrEmpty(selectedColumnForSort))
+            return false;
+
+        var column = gridData.Columns[selectedColumnForSort];
+        return column != null && column.DataType == typeof(bool);
+    }
+
+    private void ClearTempFilter()
+    {
+        tempFilterValue = "";
+    }
+
+    private bool ApplyDateFilter(object cellValue, (DateFilterType Type, DateTime? From, DateTime? To) filter)
+    {
+        if (cellValue == null || cellValue == DBNull.Value)
+            return false;
+
+        if (!DateTime.TryParse(cellValue.ToString(), out DateTime dateValue))
+            return false;
+
+        var today = DateTime.Today;
+
+        switch (filter.Type)
+        {
+            case DateFilterType.Today:
+                return dateValue.Date == today;
+
+            case DateFilterType.ThisWeek:
+                var startOfWeek = today.AddDays(-(int)today.DayOfWeek);
+                var endOfWeek = startOfWeek.AddDays(7);
+                return dateValue.Date >= startOfWeek && dateValue.Date < endOfWeek;
+
+            case DateFilterType.ThisMonth:
+                return dateValue.Year == today.Year && dateValue.Month == today.Month;
+
+            case DateFilterType.ThisYear:
+                return dateValue.Year == today.Year;
+
+            case DateFilterType.CustomRange:
+                if (filter.From.HasValue && dateValue.Date < filter.From.Value.Date)
+                    return false;
+                if (filter.To.HasValue && dateValue.Date > filter.To.Value.Date)
+                    return false;
+                return true;
+
+            default:
+                return true;
+        }
+    }
+
+    private void OnDateFilterTypeChanged()
+    {
+        // Si se selecciona rango de fechas y ambas fechas son nulas, inicializar con la fecha de hoy
+        if (tempDateFilterType == DateFilterType.CustomRange)
+        {
+            if (!tempDateFrom.HasValue && !tempDateTo.HasValue)
+            {
+                tempDateFrom = DateTime.Today;
+                tempDateTo = DateTime.Today;
+            }
+        }
+    }
+
+    private bool ApplyBooleanFilter(object cellValue, BooleanFilterType filterType)
+    {
+        if (cellValue == null || cellValue == DBNull.Value)
+            return filterType == BooleanFilterType.Unchecked; // null se considera como false/sin check
+
+        if (bool.TryParse(cellValue.ToString(), out bool boolValue))
+        {
+            return filterType switch
+            {
+                BooleanFilterType.Checked => boolValue == true,
+                BooleanFilterType.Unchecked => boolValue == false,
+                BooleanFilterType.All => true,
+                _ => true
+            };
+        }
+
+        return false;
     }
 
     private void FirstPage()
@@ -253,6 +701,19 @@
                column.DataType == typeof(short);
     }
 
+    private bool IsBooleanColumn(DataColumn column)
+    {
+        return column.DataType == typeof(bool);
+    }
+
+    private bool GetBooleanValue(object value)
+    {
+        if (value == null || value == DBNull.Value)
+            return false;
+
+        return Convert.ToBoolean(value);
+    }
+
     private string FormatCellValue(object value, DataColumn column)
     {
         if (value == null || value == DBNull.Value)
@@ -307,6 +768,14 @@
         }
     }
 
+    private void SelectSingleRow(DataRow row)
+    {
+        // Deseleccionar todas las filas
+        selectedRows.Clear();
+        // Seleccionar solo la fila clickeada
+        selectedRows.Add(row);
+    }
+
     private bool AreAllSelected()
     {
         var pagedRows = GetPagedData().ToList();
@@ -328,5 +797,173 @@
                 selectedRows.Remove(row);
             }
         }
+    }
+
+    // Toolbar methods
+    private bool HasSelection() => selectedRows.Count > 0;
+
+    private bool CanModify()
+    {
+        // Solo permitir modificar si hay exactamente UN registro seleccionado
+        if (selectedRows.Count != 1) return false;
+
+        var row = selectedRows.First();
+
+        // Verificar si el registro está anulado
+        if (row.Table.Columns.Contains("Anulado"))
+        {
+            var anulado = row["Anulado"];
+            if (anulado != null && anulado != DBNull.Value && Convert.ToBoolean(anulado))
+            {
+                return false; // Si el checkbox está seleccionado (anulado = true), no permitir modificar
+            }
+        }
+
+        return true;
+    }
+
+    private bool CanConsult()
+    {
+        // Solo permitir consultar si hay exactamente UN registro seleccionado
+        return selectedRows.Count == 1;
+    }
+
+    private bool CanDeactivate()
+    {
+        if (selectedRows.Count == 0) return false;
+
+        // Verificar que TODOS los registros seleccionados NO estén anulados
+        foreach (var row in selectedRows)
+        {
+            if (row.Table.Columns.Contains("Anulado"))
+            {
+                var anulado = row["Anulado"];
+                if (anulado != null && anulado != DBNull.Value && Convert.ToBoolean(anulado))
+                {
+                    return false; // Si encontramos algún registro anulado, no permitir desactivar
+                }
+            }
+        }
+
+        return true; // Todos los registros NO están anulados
+    }
+
+    private bool CanReactivate()
+    {
+        if (selectedRows.Count == 0) return false;
+
+        // Verificar que TODOS los registros seleccionados estén anulados
+        foreach (var row in selectedRows)
+        {
+            if (row.Table.Columns.Contains("Anulado"))
+            {
+                var anulado = row["Anulado"];
+                if (anulado == null || anulado == DBNull.Value || !Convert.ToBoolean(anulado))
+                {
+                    return false; // Si encontramos algún registro NO anulado, no permitir reactivar
+                }
+            }
+            else
+            {
+                return false; // Si no existe la columna Anulado, no permitir reactivar
+            }
+        }
+
+        return true; // Todos los registros están anulados
+    }
+
+    private bool CanDelete()
+    {
+        if (selectedRows.Count == 0) return false;
+
+        // Verificar que TODOS los registros seleccionados estén anulados
+        foreach (var row in selectedRows)
+        {
+            if (row.Table.Columns.Contains("Anulado"))
+            {
+                var anulado = row["Anulado"];
+                if (anulado == null || anulado == DBNull.Value || !Convert.ToBoolean(anulado))
+                {
+                    return false; // Si encontramos algún registro NO anulado, no permitir eliminar
+                }
+            }
+            else
+            {
+                return false; // Si no existe la columna Anulado, no permitir eliminar
+            }
+        }
+
+        return true; // Todos los registros están anulados
+    }
+
+    private void OnIngresar()
+    {
+        // TODO: Implementar lógica para ingresar nuevo registro
+        Console.WriteLine("Ingresar nuevo registro");
+    }
+
+    private void OnModificar()
+    {
+        // TODO: Implementar lógica para modificar registro seleccionado
+        Console.WriteLine($"Modificar {selectedRows.Count} registro(s)");
+    }
+
+    private void OnConsultar()
+    {
+        // TODO: Implementar lógica para consultar registro seleccionado
+        Console.WriteLine($"Consultar {selectedRows.Count} registro(s)");
+    }
+
+    private void OnDesactivar()
+    {
+        // TODO: Implementar lógica para desactivar registro seleccionado
+        Console.WriteLine($"Desactivar {selectedRows.Count} registro(s)");
+    }
+
+    private void OnReactivar()
+    {
+        // TODO: Implementar lógica para reactivar registro seleccionado
+        Console.WriteLine($"Reactivar {selectedRows.Count} registro(s)");
+    }
+
+    private void OnEliminar()
+    {
+        // TODO: Implementar lógica para eliminar registro seleccionado (con confirmación)
+        Console.WriteLine($"Eliminar {selectedRows.Count} registro(s)");
+    }
+
+    private void OnImprimir()
+    {
+        // TODO: Implementar lógica para imprimir
+        Console.WriteLine("Imprimir");
+    }
+
+    private void OnImportar()
+    {
+        // TODO: Implementar lógica para importar datos
+        Console.WriteLine("Importar datos");
+    }
+
+    private void OnExportar()
+    {
+        // TODO: Implementar lógica para exportar datos
+        Console.WriteLine("Exportar datos");
+    }
+
+    private async Task OnRefrescar()
+    {
+        await LoadDataAsync();
+    }
+
+    private void OnColumnas()
+    {
+        // TODO: Implementar diálogo de selección de columnas
+        Console.WriteLine("Configurar columnas visibles");
+    }
+
+    private void OnPropiedades()
+    {
+        // TODO: Implementar diálogo de propiedades
+        Console.WriteLine("Propiedades");
     }
 }
