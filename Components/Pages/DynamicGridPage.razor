@@ -1,6 +1,9 @@
 @using System.Data
 @using PredatorWeb.Models
+@using Microsoft.JSInterop
 @inject Services.EntidadService EntidadService
+@inject Services.ExcelExportService ExcelExportService
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
 <div class="grid-container">
@@ -1004,10 +1007,47 @@
         Console.WriteLine("Importar datos");
     }
 
-    private void OnExportar()
+    private async Task OnExportar()
     {
-        // TODO: Implementar lógica para exportar datos
-        Console.WriteLine("Exportar datos");
+        if (state.GridData == null || state.GridData.Rows.Count == 0)
+            return;
+
+        try
+        {
+            // Crear una copia del DataTable con TODAS las columnas visibles
+            var exportTable = new DataTable();
+
+            // Agregar solo las columnas visibles
+            foreach (DataColumn column in state.GridData.Columns)
+            {
+                if (!ShouldHideColumn(column.ColumnName))
+                {
+                    exportTable.Columns.Add(column.ColumnName, column.DataType);
+                }
+            }
+
+            // Copiar todas las filas filtradas/ordenadas (sin paginación)
+            foreach (DataRow row in GetFilteredData())
+            {
+                var newRow = exportTable.NewRow();
+                foreach (DataColumn column in exportTable.Columns)
+                {
+                    newRow[column.ColumnName] = row[column.ColumnName];
+                }
+                exportTable.Rows.Add(newRow);
+            }
+
+            // Generar el archivo Excel
+            var excelBytes = ExcelExportService.ExportToExcel(exportTable, NombreEntidad ?? "Datos");
+
+            // Descargar el archivo usando JavaScript
+            var fileName = $"{NombreEntidad}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al exportar: {ex.Message}");
+        }
     }
 
     private async Task OnRefrescar()

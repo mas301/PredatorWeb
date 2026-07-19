@@ -16,6 +16,7 @@ builder.Services.AddSingleton<EntidadResolverService>();
 // Register services
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<EntidadService>();
+builder.Services.AddScoped<ExcelExportService>();
 
 var app = builder.Build();
 
