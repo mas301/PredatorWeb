@@ -96,14 +96,6 @@
                             <div class="form-group">
                                 <button class="btn-primary" @onclick="OnLoginClick">Iniciar Sesión</button>
                             </div>
-                            @if (!string.IsNullOrEmpty(debugMessage))
-                            {
-                                <div class="form-group">
-                                    <div style="background-color: #f0f0f0; padding: 10px; border-radius: 4px; font-size: 12px;">
-                                        <strong>Debug:</strong> @debugMessage
-                                    </div>
-                                </div>
-                            }
                             <div class="form-group">
                                 <label>
                                     <input type="checkbox" @bind="rememberCredentials" />
@@ -156,7 +148,6 @@
     private bool isLoggedIn = false;
     private string? selectedModuleName = null;
     private bool showModulesDropdown = false;
-    private string debugMessage = "";
 
     protected override Task OnInitializedAsync()
     {
@@ -172,19 +163,10 @@
     {
         try
         {
-            debugMessage = "Iniciando login...";
-            Logger.LogInformation("=== INICIO DE LOGIN ===");
             isLoading = true;
             StateHasChanged();
 
-            Logger.LogInformation("Iniciando carga de menú...");
-            debugMessage = "Cargando menú...";
-            StateHasChanged();
-
             menuItems = await MenuService.GetMenuItemsAsync();
-            Logger.LogInformation($"Menú cargado: {menuItems.Count} items");
-            debugMessage = $"Menú cargado: {menuItems.Count} items";
-            StateHasChanged();
 
             isLoggedIn = true;
             StateHasChanged();
@@ -192,24 +174,11 @@
             var ventasModule = menuItems.FirstOrDefault(m => m.Menu.Equals("Ventas", StringComparison.OrdinalIgnoreCase));
             if (ventasModule != null)
             {
-                Logger.LogInformation($"Módulo Ventas encontrado: {ventasModule.Menu}");
-                debugMessage = $"Módulo Ventas encontrado: {ventasModule.Menu}";
-                StateHasChanged();
                 await OnModuleSelected(ventasModule);
-            }
-            else
-            {
-                Logger.LogWarning("Módulo Ventas NO encontrado");
-                var modulosDisponibles = string.Join(", ", menuItems.Select(m => m.Menu));
-                Logger.LogInformation($"Módulos disponibles: {modulosDisponibles}");
-                debugMessage = $"Ventas NO encontrado. Disponibles: {modulosDisponibles}";
-                StateHasChanged();
             }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "ERROR al cargar el menú");
-            debugMessage = $"ERROR: {ex.Message}";
             menuItems = new List<Models.GrlMenu>();
             StateHasChanged();
         }
@@ -217,7 +186,6 @@
         {
             isLoading = false;
             StateHasChanged();
-            Logger.LogInformation("=== FIN DE LOGIN ===");
         }
     }
 
@@ -231,7 +199,6 @@
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error al cargar submenús: {ex.Message}");
             subMenuItems = new List<Models.GrlMenu>();
         }
     }

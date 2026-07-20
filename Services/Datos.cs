@@ -6,15 +6,11 @@ namespace PredatorWeb.Services
     public class Datos
     {
         private readonly string _connectionString;
-        private readonly ILogger<Datos> _logger;
 
-        public Datos(IConfiguration configuration, ILogger<Datos> logger)
+        public Datos(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("DLK")
                 ?? "Data Source=caleb.pe;Initial Catalog=DLK;User Id=sagesnet;Password=D0br@nOc;TrustServerCertificate=True;Encrypt=True;";
-            _logger = logger;
-
-            _logger.LogInformation($"Datos inicializado con connection string: {MaskConnectionString(_connectionString)}");
         }
 
         /// <summary>
@@ -26,8 +22,6 @@ namespace PredatorWeb.Services
 
             try
             {
-                _logger.LogInformation($"Ejecutando query: {query}");
-
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
 
@@ -39,12 +33,9 @@ namespace PredatorWeb.Services
 
                 using var adapter = new SqlDataAdapter(command);
                 adapter.Fill(dataTable);
-
-                _logger.LogInformation($"Query ejecutado exitosamente. {dataTable.Rows.Count} registros obtenidos.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error al ejecutar query: {query}");
                 throw;
             }
 
@@ -58,8 +49,6 @@ namespace PredatorWeb.Services
         {
             try
             {
-                _logger.LogInformation($"Ejecutando query con reader: {query}");
-
                 var command = new SqlCommand(query, connection);
                 if (parameters != null && parameters.Length > 0)
                 {
@@ -67,13 +56,11 @@ namespace PredatorWeb.Services
                 }
 
                 var reader = await command.ExecuteReaderAsync();
-                _logger.LogInformation("Query ejecutado exitosamente con reader.");
 
                 return reader;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error al ejecutar query con reader: {query}");
                 throw;
             }
         }
@@ -87,8 +74,6 @@ namespace PredatorWeb.Services
 
             try
             {
-                _logger.LogInformation($"Ejecutando comando: {query}");
-
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
 
@@ -99,12 +84,9 @@ namespace PredatorWeb.Services
                 }
 
                 affectedRows = await command.ExecuteNonQueryAsync();
-
-                _logger.LogInformation($"Comando ejecutado exitosamente. {affectedRows} filas afectadas.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error al ejecutar comando: {query}");
                 throw;
             }
 
@@ -120,8 +102,6 @@ namespace PredatorWeb.Services
 
             try
             {
-                _logger.LogInformation($"Ejecutando comando scalar: {query}");
-
                 using var connection = new SqlConnection(_connectionString);
                 await connection.OpenAsync();
 
@@ -132,12 +112,9 @@ namespace PredatorWeb.Services
                 }
 
                 result = await command.ExecuteScalarAsync();
-
-                _logger.LogInformation($"Comando scalar ejecutado exitosamente. Resultado: {result}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error al ejecutar comando scalar: {query}");
                 throw;
             }
 
@@ -150,17 +127,6 @@ namespace PredatorWeb.Services
         public SqlConnection CreateConnection()
         {
             return new SqlConnection(_connectionString);
-        }
-
-        /// <summary>
-        /// Enmascara la contraseña en la cadena de conexión para logs
-        /// </summary>
-        private string MaskConnectionString(string connectionString)
-        {
-            return System.Text.RegularExpressions.Regex.Replace(
-                connectionString,
-                @"Password=([^;]+)",
-                "Password=***");
         }
     }
 }

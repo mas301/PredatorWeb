@@ -38,8 +38,14 @@ public class GridPageState
     // Filtrado de booleanos
     public BooleanFilterType TempBooleanFilterType { get; set; } = BooleanFilterType.All;
 
+    // Filtros de selección múltiple (para columnas con pocos valores distintos)
+    public List<string>? AvailableFilterValues { get; set; } = null;
+    public HashSet<string> SelectedFilterValues { get; set; } = new();
+    public bool IsLoadingFilterValues { get; set; } = false;
+
     // Filtros activos por columna
     public Dictionary<string, string> ColumnFilters { get; } = new();
+    public Dictionary<string, List<string>> MultiValueFilters { get; } = new();
     public Dictionary<string, (DateFilterType Type, DateTime? From, DateTime? To)> DateFilters { get; } = new();
     public Dictionary<string, BooleanFilterType> BooleanFilters { get; } = new();
 
@@ -58,6 +64,7 @@ public class GridPageState
     public bool HasActiveFilters()
     {
         return ColumnFilters.Any() || 
+               MultiValueFilters.Any() ||
                DateFilters.Any() || 
                BooleanFilters.Any(f => f.Value != BooleanFilterType.All);
     }
@@ -65,6 +72,7 @@ public class GridPageState
     public void ClearAllFilters()
     {
         ColumnFilters.Clear();
+        MultiValueFilters.Clear();
         DateFilters.Clear();
         BooleanFilters.Clear();
     }

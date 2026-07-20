@@ -1,5 +1,6 @@
 @using System.Data
 @using PredatorWeb.Models
+@using PredatorWeb.Components.Dialogs
 @using Microsoft.JSInterop
 @inject Services.EntidadService EntidadService
 @inject Services.ExcelExportService ExcelExportService
@@ -201,230 +202,43 @@
         </div>
     }
 
-    <!-- Diálogo de ordenamiento -->
+    <!-- Diálogo de ordenamiento y filtrado -->
     @if (state.ShowSortDialog)
     {
-        <div class="modal-overlay" @onclick="CancelSort">
-            <div class="modal-dialog" @onclick:stopPropagation="true">
-                <div class="modal-header">
-                    <h3>Ordenar y Filtrar: @FormatColumnName(state.SelectedColumnForSort ?? "")</h3>
-                </div>
-                <div class="modal-body">
-                    <div class="sort-section">
-                        <h4>Ordenamiento</h4>
-                        <div class="sort-options">
-                            <label>
-                                <input type="radio" name="sortOrder" value="asc" checked="@state.TempSortAscending" @onchange="@(() => state.TempSortAscending = true)" />
-                                Ascendente (A-Z, 0-9)
-                            </label>
-                            <label>
-                                <input type="radio" name="sortOrder" value="desc" checked="@(!state.TempSortAscending)" @onchange="@(() => state.TempSortAscending = false)" />
-                                Descendente (Z-A, 9-0)
-                            </label>
-                        </div>
-                    </div>
-
-                    @if (IsSelectedColumnString())
-                    {
-                        <div class="filter-section">
-                            <h4>Filtro de texto</h4>
-                            <input type="text" 
-                                   class="filter-input" 
-                                   placeholder="Ingrese texto para filtrar..." 
-                                   @bind="state.TempFilterValue" />
-                            @if (!string.IsNullOrEmpty(state.TempFilterValue))
-                            {
-                                <button class="btn-clear-filter" @onclick="ClearTempFilter">✖ Limpiar</button>
-                            }
-                        </div>
-                    }
-
-                    @if (IsSelectedColumnDate())
-                    {
-                        <div class="filter-section">
-                            <h4>Filtro de fecha</h4>
-                            <select class="date-filter-select" @bind="state.TempDateFilterType" @bind:after="OnDateFilterTypeChanged">
-                                <option value="@DateFilterType.None">Sin filtro</option>
-                                <option value="@DateFilterType.Today">Hoy</option>
-                                <option value="@DateFilterType.ThisWeek">Esta Semana</option>
-                                <option value="@DateFilterType.ThisMonth">Este Mes</option>
-                                <option value="@DateFilterType.ThisYear">Este Año</option>
-                                <option value="@DateFilterType.CustomRange">Rango de fechas</option>
-                            </select>
-
-                            @if (state.TempDateFilterType == DateFilterType.CustomRange)
-                            {
-                                <div class="date-range-inputs">
-                                    <div class="date-input-group">
-                                        <label>Desde:</label>
-                                        <input type="date" class="date-input" @bind="state.TempDateFrom" />
-                                    </div>
-                                    <div class="date-input-group">
-                                        <label>Hasta:</label>
-                                        <input type="date" class="date-input" @bind="state.TempDateTo" />
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
-
-                    @if (IsSelectedColumnBoolean())
-                    {
-                        <div class="filter-section">
-                            <h4>Filtro de checkbox</h4>
-                            <select class="boolean-filter-select" @bind="state.TempBooleanFilterType">
-                                <option value="@BooleanFilterType.All">Todas</option>
-                                <option value="@BooleanFilterType.Checked">Solo con check (✓)</option>
-                                <option value="@BooleanFilterType.Unchecked">Solo sin check</option>
-                            </select>
-                        </div>
-                    }
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-modal btn-cancel" @onclick="CancelSort">Cancelar</button>
-                    <button class="btn-modal btn-accept" @onclick="AcceptSort">Aceptar</button>
-                </div>
-            </div>
-        </div>
+        <SortFilterDialog 
+            ColumnName="@state.SelectedColumnForSort"
+            ColumnType="@GetColumnFilterType()"
+            SortAscending="@state.TempSortAscending"
+            FilterValue="@state.TempFilterValue"
+            AvailableValues="@state.AvailableFilterValues"
+            SelectedValues="@state.SelectedFilterValues"
+            IsLoadingValues="@state.IsLoadingFilterValues"
+            DateFilterType="@state.TempDateFilterType"
+            DateFrom="@state.TempDateFrom"
+            DateTo="@state.TempDateTo"
+            BooleanFilterType="@state.TempBooleanFilterType"
+            OnCancel="@CancelSort"
+            OnAccept="@HandleSortFilterAccept" />
     }
 
     <!-- Diálogo de configuración de columnas -->
     @if (state.ShowColumnDialog)
     {
-        <div class="modal-overlay" @onclick="CancelColumnConfig">
-            <div class="modal-dialog modal-dialog-large" @onclick:stopPropagation="true">
-                <div class="modal-header">
-                    <h3>⚙️ Configurar Columnas</h3>
-                </div>
-                <div class="modal-body">
-                    <div class="column-config-container">
-                        <div class="column-config-header">
-                            <span class="col-drag"></span>
-                            <span class="col-name">Nombre de Columna</span>
-                            <span class="col-visible">Visible</span>
-                        </div>
-                        @for (int i = 0; i < state.ColumnConfigs.Count; i++)
-                        {
-                            var index = i;
-                            var config = state.ColumnConfigs[index];
-                            var isDragOver = dragOverColumnIndex == index && draggedColumnIndex != index;
-                            var isDragging = draggedColumnIndex == index;
-
-                            <div class="column-config-row @(isDragOver ? "drag-over" : "") @(isDragging ? "dragging" : "")"
-                                 draggable="true"
-                                 @ondragstart="@(() => OnDragStart(index))"
-                                 @ondragover="@(() => OnDragOver(index))"
-                                 @ondragover:preventDefault="true"
-                                 @ondrop="@(() => OnDrop(index))"
-                                 @ondragend="OnDragEnd"
-                                 @ondragleave="OnDragLeave">
-                                <div class="col-drag">
-                                    <span class="drag-handle" title="Arrastrar para reordenar">⋮⋮</span>
-                                </div>
-                                <div class="col-name">
-                                    <span class="@(config.IsVisible ? "" : "column-hidden")">
-                                        @config.DisplayName
-                                    </span>
-                                </div>
-                                <div class="col-visible">
-                                    <input type="checkbox" 
-                                           checked="@config.IsVisible" 
-                                           @onchange="@(e => ToggleColumnVisibility(index))" />
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn-modal btn-cancel" @onclick="CancelColumnConfig">Cancelar</button>
-                    <button class="btn-modal btn-accept" @onclick="AcceptColumnConfig">Aceptar</button>
-                </div>
-            </div>
-        </div>
+        <ColumnConfigDialog 
+            ColumnConfigs="@state.ColumnConfigs"
+            OnCancel="@CancelColumnConfig"
+            OnAccept="@HandleColumnConfigAccept" />
     }
 
     <!-- Diálogo de vista previa de impresión -->
     @if (state.ShowPrintPreview && state.PrintPreviewData != null)
     {
-        <div class="modal-overlay print-preview-overlay" @onclick="ClosePrintPreview">
-            <div class="modal-dialog print-preview-dialog" @onclick:stopPropagation="true">
-                <div class="modal-header no-print">
-                    <h3>🖨️ Vista Previa - @NombreEntidad</h3>
-                </div>
-                <div class="modal-body print-preview-body">
-                    <div class="print-preview-content" id="printArea">
-                        <div class="print-header">
-                            <h2>@NombreEntidad</h2>
-                            <p class="print-date">Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
-                        </div>
-                        <table class="print-table">
-                            <thead>
-                                <tr>
-                                    @foreach (DataColumn column in state.PrintPreviewData.Columns)
-                                    {
-                                        <th class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatColumnName(column.ColumnName)</th>
-                                    }
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (DataRow row in state.PrintPreviewData.Rows)
-                                {
-                                    <tr>
-                                        @foreach (DataColumn column in state.PrintPreviewData.Columns)
-                                        {
-                                            <td class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatCellValue(row[column])</td>
-                                        }
-                                    </tr>
-                                }
-                            </tbody>
-                            <tfoot>
-                                <tr class="print-totals-row">
-                                    @{
-                                        var columns = state.PrintPreviewData.Columns.Cast<DataColumn>().ToList();
-                                        var totalColumnsCount = columns.Count;
-                                        // El colspan será como máximo 3 columnas o la mitad de las columnas totales
-                                        var colspanForLabel = Math.Min(3, Math.Max(1, totalColumnsCount / 2));
-                                        var columnIndex = 0;
-                                    }
-
-                                    @* Primera celda con el label TOTALES que ocupa varias columnas *@
-                                    <td class="print-totals-label" colspan="@colspanForLabel">
-                                        <strong>TOTALES</strong>
-                                    </td>
-
-                                    @* Iterar sobre TODAS las columnas después del colspan *@
-                                    @foreach (var column in columns)
-                                    {
-                                        columnIndex++;
-                                        @if (columnIndex > colspanForLabel)
-                                        {
-                                            <td class="@(IsNumericColumn(column) ? "text-right" : "")">
-                                                @if (IsNumericColumn(column))
-                                                {
-                                                    <strong>@FormatTotal(GetPrintPreviewColumnTotal(column))</strong>
-                                                }
-                                            </td>
-                                        }
-                                    }
-                                </tr>
-                            </tfoot>
-                        </table>
-                        <div class="print-footer">
-                            <p>Total de registros: @state.PrintPreviewData.Rows.Count</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer no-print">
-                    <button class="btn-modal btn-export" @onclick="ExportFromPreview" title="Exportar a Excel">
-                        📊 Exportar a Excel
-                    </button>
-                    <button class="btn-modal btn-print" @onclick="PrintFromPreview" title="Imprimir">
-                        🖨️ Imprimir
-                    </button>
-                    <button class="btn-modal btn-cancel" @onclick="ClosePrintPreview">Cerrar</button>
-                </div>
-            </div>
-        </div>
+        <PrintPreviewDialog 
+            Title="@NombreEntidad"
+            PreviewData="@state.PrintPreviewData"
+            OnClose="@ClosePrintPreview"
+            OnExport="@ExportFromPreview"
+            OnPrint="@PrintFromPreview" />
     }
 </div>
 
@@ -437,10 +251,6 @@
 
     // Backup temporal de la configuración de columnas para "Cancelar"
     private List<ColumnConfig>? tempColumnConfigsBackup = null;
-
-    // Variables para drag and drop de columnas
-    private int? draggedColumnIndex = null;
-    private int? dragOverColumnIndex = null;
 
     public void Dispose()
     {
@@ -554,65 +364,14 @@
 
     private IEnumerable<DataRow> GetFilteredData()
     {
+        // Los datos ya vienen filtrados y ordenados desde el servidor
+        // Este método ahora solo retorna los datos tal cual
         if (state.GridData == null) return Enumerable.Empty<DataRow>();
 
-        var rows = state.GridData.AsEnumerable();
-
-        // Aplicar filtros de texto
-        foreach (var filter in state.ColumnFilters)
-        {
-            var columnName = filter.Key;
-            var filterValue = filter.Value;
-
-            if (!string.IsNullOrWhiteSpace(filterValue))
-            {
-                rows = rows.Where(r => 
-                {
-                    var cellValue = r[columnName];
-                    if (cellValue == null || cellValue == DBNull.Value)
-                        return false;
-                    return cellValue.ToString()?.Contains(filterValue, StringComparison.OrdinalIgnoreCase) ?? false;
-                });
-            }
-        }
-
-        // Aplicar filtros de fecha
-        foreach (var filter in state.DateFilters)
-        {
-            var columnName = filter.Key;
-            var dateFilter = filter.Value;
-
-            if (dateFilter.Type != DateFilterType.None)
-            {
-                rows = rows.Where(r => ApplyDateFilter(r[columnName], dateFilter));
-            }
-        }
-
-        // Aplicar filtros de booleanos
-        foreach (var filter in state.BooleanFilters)
-        {
-            var columnName = filter.Key;
-            var booleanFilter = filter.Value;
-
-            if (booleanFilter != BooleanFilterType.All)
-            {
-                rows = rows.Where(r => ApplyBooleanFilter(r[columnName], booleanFilter));
-            }
-        }
-
-        // Aplicar ordenamiento
-        if (!string.IsNullOrEmpty(state.SortColumn))
-        {
-            rows = state.SortAscending 
-                ? rows.OrderBy(r => r[state.SortColumn]) 
-                : rows.OrderByDescending(r => r[state.SortColumn]);
-        }
-
-        // Retornar todos los datos sin paginación
-        return rows.ToList();
+        return state.GridData.AsEnumerable();
     }
 
-    private void SortByColumn(string columnName)
+    private async Task SortByColumn(string columnName)
     {
         if (state.SortColumn == columnName)
         {
@@ -623,9 +382,12 @@
             state.SortColumn = columnName;
             state.SortAscending = true;
         }
+
+        // Recargar datos del servidor con el nuevo ordenamiento
+        await ReloadDataWithFiltersAsync();
     }
 
-    private void ShowSortDialog(string columnName)
+    private async Task ShowSortDialog(string columnName)
     {
         state.SelectedColumnForSort = columnName;
         // Si la columna ya está ordenada, usar el mismo orden, sino ascendente por defecto
@@ -646,6 +408,16 @@
         else
         {
             state.TempFilterValue = "";
+        }
+
+        // Cargar selecciones múltiples existentes
+        if (state.MultiValueFilters.ContainsKey(columnName))
+        {
+            state.SelectedFilterValues = new HashSet<string>(state.MultiValueFilters[columnName]);
+        }
+        else
+        {
+            state.SelectedFilterValues.Clear();
         }
 
         // Cargar el filtro de fecha existente para esta columna si existe
@@ -673,10 +445,39 @@
             state.TempBooleanFilterType = BooleanFilterType.All;
         }
 
-        state.ShowSortDialog = true;
+        // Cargar valores únicos si es una columna de texto
+        if (IsSelectedColumnString())
+        {
+            state.AvailableFilterValues = null;
+            state.IsLoadingFilterValues = true;
+            state.ShowSortDialog = true;
+            StateHasChanged();
+
+            try
+            {
+                var distinctValues = await EntidadService.GetDistinctValuesAsync(NombreEntidad, columnName);
+                state.AvailableFilterValues = distinctValues;
+            }
+            catch (Exception ex)
+            {
+                // Si hay error, simplemente usar input de texto
+                state.AvailableFilterValues = null;
+            }
+            finally
+            {
+                state.IsLoadingFilterValues = false;
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            state.AvailableFilterValues = null;
+            state.ShowSortDialog = true;
+            StateHasChanged();
+        }
     }
 
-    private void AcceptSort()
+    private async Task AcceptSort()
     {
         if (!string.IsNullOrEmpty(state.SelectedColumnForSort))
         {
@@ -686,13 +487,19 @@
             // Guardar o eliminar el filtro según el valor
             if (IsSelectedColumnString())
             {
-                if (!string.IsNullOrWhiteSpace(state.TempFilterValue))
+                // Limpiar ambos tipos de filtros de esta columna primero
+                state.ColumnFilters.Remove(state.SelectedColumnForSort);
+                state.MultiValueFilters.Remove(state.SelectedColumnForSort);
+
+                // Si hay filtros por checkbox seleccionados
+                if (state.SelectedFilterValues.Any())
+                {
+                    state.MultiValueFilters[state.SelectedColumnForSort] = state.SelectedFilterValues.ToList();
+                }
+                // Si hay texto en el filtro manual
+                else if (!string.IsNullOrWhiteSpace(state.TempFilterValue))
                 {
                     state.ColumnFilters[state.SelectedColumnForSort] = state.TempFilterValue;
-                }
-                else
-                {
-                    state.ColumnFilters.Remove(state.SelectedColumnForSort);
                 }
             }
 
@@ -723,6 +530,86 @@
             }
         }
         state.ShowSortDialog = false;
+
+        // Recargar datos desde el servidor con los filtros aplicados
+        await ReloadDataWithFiltersAsync();
+    }
+
+    private async Task HandleSortFilterAccept(SortFilterResult result)
+    {
+        if (!string.IsNullOrEmpty(state.SelectedColumnForSort))
+        {
+            state.SortColumn = state.SelectedColumnForSort;
+            state.SortAscending = result.SortAscending;
+
+            // Actualizar los valores temporales desde el resultado
+            state.TempSortAscending = result.SortAscending;
+            state.TempFilterValue = result.FilterValue;
+            state.SelectedFilterValues = new HashSet<string>(result.SelectedValues);
+            state.TempDateFilterType = result.DateFilterType;
+            state.TempDateFrom = result.DateFrom;
+            state.TempDateTo = result.DateTo;
+            state.TempBooleanFilterType = result.BooleanFilterType;
+
+            // Procesar los filtros igual que antes
+            await AcceptSort();
+        }
+    }
+
+    private ColumnFilterType GetColumnFilterType()
+    {
+        if (IsSelectedColumnString())
+            return ColumnFilterType.String;
+        if (IsSelectedColumnDate())
+            return ColumnFilterType.Date;
+        if (IsSelectedColumnBoolean())
+            return ColumnFilterType.Boolean;
+        return ColumnFilterType.Numeric;
+    }
+
+    private async Task ReloadDataWithFiltersAsync()
+    {
+        if (string.IsNullOrEmpty(NombreEntidad))
+            return;
+
+        state.IsLoading = true;
+        try
+        {
+            // Construir el objeto de filtros para enviar al servidor
+            var serverFilter = new ServerFilter
+            {
+                ColumnFilters = new Dictionary<string, string>(state.ColumnFilters),
+                MultiValueFilters = new Dictionary<string, List<string>>(state.MultiValueFilters),
+                DateFilters = new Dictionary<string, DateFilter>(),
+                BooleanFilters = new Dictionary<string, BooleanFilterType>(state.BooleanFilters),
+                SortColumn = state.SortColumn,
+                SortAscending = state.SortAscending
+            };
+
+            // Convertir DateFilters al formato esperado
+            foreach (var df in state.DateFilters)
+            {
+                serverFilter.DateFilters[df.Key] = new DateFilter
+                {
+                    Type = df.Value.Type,
+                    StartDate = df.Value.From,
+                    EndDate = df.Value.To
+                };
+            }
+
+            // Cargar datos con filtros
+            state.GridData = await EntidadService.GetEntidadDataAsync(NombreEntidad, serverFilter);
+            state.SelectedRows.Clear();
+        }
+        catch (Exception ex)
+        {
+            state.ErrorMessage = ex.Message;
+            state.StackTrace = ex.StackTrace;
+        }
+        finally
+        {
+            state.IsLoading = false;
+        }
     }
 
     private void CancelSort()
@@ -760,6 +647,31 @@
     private void ClearTempFilter()
     {
         state.TempFilterValue = "";
+    }
+
+    private void ToggleFilterValue(string value, bool isChecked)
+    {
+        if (isChecked)
+        {
+            state.SelectedFilterValues.Add(value);
+        }
+        else
+        {
+            state.SelectedFilterValues.Remove(value);
+        }
+    }
+
+    private void SelectAllFilterValues()
+    {
+        if (state.AvailableFilterValues != null)
+        {
+            state.SelectedFilterValues = new HashSet<string>(state.AvailableFilterValues);
+        }
+    }
+
+    private void ClearAllFilterValues()
+    {
+        state.SelectedFilterValues.Clear();
     }
 
     private bool ApplyDateFilter(object cellValue, (DateFilterType Type, DateTime? From, DateTime? To) filter)
@@ -1180,37 +1092,31 @@
     private void OnIngresar()
     {
         // TODO: Implementar lógica para ingresar nuevo registro
-        Console.WriteLine("Ingresar nuevo registro");
     }
 
     private void OnModificar()
     {
         // TODO: Implementar lógica para modificar registro seleccionado
-        Console.WriteLine($"Modificar {state.SelectedRows.Count} registro(s)");
     }
 
     private void OnConsultar()
     {
         // TODO: Implementar lógica para consultar registro seleccionado
-        Console.WriteLine($"Consultar {state.SelectedRows.Count} registro(s)");
     }
 
     private void OnDesactivar()
     {
         // TODO: Implementar lógica para desactivar registro seleccionado
-        Console.WriteLine($"Desactivar {state.SelectedRows.Count} registro(s)");
     }
 
     private void OnReactivar()
     {
         // TODO: Implementar lógica para reactivar registro seleccionado
-        Console.WriteLine($"Reactivar {state.SelectedRows.Count} registro(s)");
     }
 
     private void OnEliminar()
     {
         // TODO: Implementar lógica para eliminar registro seleccionado (con confirmación)
-        Console.WriteLine($"Eliminar {state.SelectedRows.Count} registro(s)");
     }
 
     private void OnImprimir()
@@ -1246,10 +1152,11 @@
             // Guardar en el estado y mostrar el diálogo
             state.PrintPreviewData = previewTable;
             state.ShowPrintPreview = true;
+            StateHasChanged();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al generar vista previa: {ex.Message}");
+            // Registrar error si es necesario
         }
     }
 
@@ -1283,14 +1190,13 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al exportar desde vista previa: {ex.Message}");
+            // Registrar error si es necesario
         }
     }
 
     private void OnImportar()
     {
         // TODO: Implementar lógica para importar datos
-        Console.WriteLine("Importar datos");
     }
 
     private async Task OnExportar()
@@ -1332,7 +1238,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error al exportar: {ex.Message}");
+            // Registrar error si es necesario
         }
     }
 
@@ -1352,12 +1258,12 @@
         }).ToList();
 
         state.ShowColumnDialog = true;
+        StateHasChanged();
     }
 
     private void OnPropiedades()
     {
         // TODO: Implementar diálogo de propiedades
-        Console.WriteLine("Propiedades");
     }
 
     // ===== Métodos para configuración de columnas =====
@@ -1378,55 +1284,6 @@
                 DisplayOrder = order++
             });
         }
-    }
-
-    private void ToggleColumnVisibility(int index)
-    {
-        if (index >= 0 && index < state.ColumnConfigs.Count)
-        {
-            state.ColumnConfigs[index].IsVisible = !state.ColumnConfigs[index].IsVisible;
-        }
-    }
-
-    // Métodos de drag and drop para reordenar columnas
-    private void OnDragStart(int index)
-    {
-        draggedColumnIndex = index;
-    }
-
-    private void OnDragOver(int index)
-    {
-        dragOverColumnIndex = index;
-    }
-
-    private void OnDragLeave()
-    {
-        dragOverColumnIndex = null;
-    }
-
-    private void OnDrop(int targetIndex)
-    {
-        if (draggedColumnIndex.HasValue && draggedColumnIndex.Value != targetIndex)
-        {
-            var draggedItem = state.ColumnConfigs[draggedColumnIndex.Value];
-            state.ColumnConfigs.RemoveAt(draggedColumnIndex.Value);
-            state.ColumnConfigs.Insert(targetIndex, draggedItem);
-
-            // Actualizar DisplayOrder
-            for (int i = 0; i < state.ColumnConfigs.Count; i++)
-            {
-                state.ColumnConfigs[i].DisplayOrder = i;
-            }
-        }
-
-        draggedColumnIndex = null;
-        dragOverColumnIndex = null;
-    }
-
-    private void OnDragEnd()
-    {
-        draggedColumnIndex = null;
-        dragOverColumnIndex = null;
     }
 
     private void CancelColumnConfig()
@@ -1450,6 +1307,13 @@
         tempColumnConfigsBackup = null;
 
         StateHasChanged();
+    }
+
+    private async Task HandleColumnConfigAccept(List<ColumnConfig> updatedConfigs)
+    {
+        state.ColumnConfigs = updatedConfigs;
+        AcceptColumnConfig();
+        await Task.CompletedTask;
     }
 
     // Método actualizado para verificar si una columna debe ocultarse
@@ -1499,11 +1363,15 @@
         return state.ColumnFilters.Any() || state.DateFilters.Any() || state.BooleanFilters.Any(f => f.Value != BooleanFilterType.All);
     }
 
-    private void ClearAllFilters()
+    private async Task ClearAllFilters()
     {
         state.ColumnFilters.Clear();
         state.DateFilters.Clear();
         state.BooleanFilters.Clear();
+        state.SortColumn = null;
+
+        // Recargar datos sin filtros
+        await ReloadDataWithFiltersAsync();
     }
 
     private string GetFilterDescription()

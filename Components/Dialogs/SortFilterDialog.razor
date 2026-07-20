@@ -1,0 +1,216 @@
+@namespace PredatorWeb.Components.Dialogs
+@using PredatorWeb.Models
+@using PredatorWeb.Services
+
+<div class="modal-overlay" @onclick="OnCancel">
+    <div class="modal-dialog" @onclick:stopPropagation="true">
+        <div class="modal-header">
+            <h3>Ordenar y Filtrar: @FormatColumnName(ColumnName ?? "")</h3>
+        </div>
+        <div class="modal-body">
+            <div class="sort-section">
+                <h4>Ordenamiento</h4>
+                <div class="sort-options">
+                    <label>
+                        <input type="radio" name="sortOrder" value="asc" checked="@localSortAscending" @onchange="@(() => localSortAscending = true)" />
+                        Ascendente (A-Z, 0-9)
+                    </label>
+                    <label>
+                        <input type="radio" name="sortOrder" value="desc" checked="@(!localSortAscending)" @onchange="@(() => localSortAscending = false)" />
+                        Descendente (Z-A, 9-0)
+                    </label>
+                </div>
+            </div>
+
+            @if (ColumnType == ColumnFilterType.String)
+            {
+                <div class="filter-section">
+                    <h4>Filtro de texto</h4>
+
+                    @if (IsLoadingValues)
+                    {
+                        <div class="loading-values">Cargando valores...</div>
+                    }
+                    else if (AvailableValues != null && AvailableValues.Any())
+                    {
+                        <div class="filter-checkboxes">
+                            <div class="checkbox-actions">
+                                <button type="button" class="btn-link" @onclick="SelectAllValues">Seleccionar todos</button>
+                                <button type="button" class="btn-link" @onclick="ClearAllValues">Limpiar todos</button>
+                            </div>
+                            <div class="checkbox-list">
+                                @foreach (var value in AvailableValues)
+                                {
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" 
+                                               checked="@localSelectedValues.Contains(value)"
+                                               @onchange="@(e => ToggleValue(value, (bool)e.Value!))" />
+                                        <span>@value</span>
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <input type="text" 
+                               class="filter-input" 
+                               placeholder="Ingrese texto para filtrar..." 
+                               @bind="localFilterValue" />
+                        @if (!string.IsNullOrEmpty(localFilterValue))
+                        {
+                            <button class="btn-clear-filter" @onclick="ClearFilterValue">✖ Limpiar</button>
+                        }
+                    }
+                </div>
+            }
+
+            @if (ColumnType == ColumnFilterType.Date)
+            {
+                <div class="filter-section">
+                    <h4>Filtro de fecha</h4>
+                    <select class="date-filter-select" @bind="localDateFilterType" @bind:after="OnDateFilterTypeChanged">
+                        <option value="@DateFilterType.None">Sin filtro</option>
+                        <option value="@DateFilterType.Today">Hoy</option>
+                        <option value="@DateFilterType.ThisWeek">Esta Semana</option>
+                        <option value="@DateFilterType.ThisMonth">Este Mes</option>
+                        <option value="@DateFilterType.ThisYear">Este Año</option>
+                        <option value="@DateFilterType.CustomRange">Rango de fechas</option>
+                    </select>
+
+                    @if (localDateFilterType == Models.DateFilterType.CustomRange)
+                    {
+                        <div class="date-range-inputs">
+                            <div class="date-input-group">
+                                <label>Desde:</label>
+                                <input type="date" class="date-input" @bind="localDateFrom" />
+                            </div>
+                            <div class="date-input-group">
+                                <label>Hasta:</label>
+                                <input type="date" class="date-input" @bind="localDateTo" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (ColumnType == ColumnFilterType.Boolean)
+            {
+                <div class="filter-section">
+                    <h4>Filtro de checkbox</h4>
+                    <select class="boolean-filter-select" @bind="localBooleanFilterType">
+                        <option value="@BooleanFilterType.All">Todas</option>
+                        <option value="@BooleanFilterType.Checked">Solo con check (✓)</option>
+                        <option value="@BooleanFilterType.Unchecked">Solo sin check</option>
+                    </select>
+                </div>
+            }
+        </div>
+        <div class="modal-footer">
+            <button class="btn-modal btn-cancel" @onclick="OnCancel">Cancelar</button>
+            <button class="btn-modal btn-accept" @onclick="HandleAccept">Aceptar</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? ColumnName { get; set; }
+    [Parameter] public ColumnFilterType ColumnType { get; set; }
+    [Parameter] public bool SortAscending { get; set; } = true;
+    [Parameter] public string FilterValue { get; set; } = "";
+    [Parameter] public List<string>? AvailableValues { get; set; }
+    [Parameter] public HashSet<string> SelectedValues { get; set; } = new();
+    [Parameter] public bool IsLoadingValues { get; set; }
+    [Parameter] public DateFilterType DateFilterType { get; set; } = DateFilterType.None;
+    [Parameter] public DateTime? DateFrom { get; set; }
+    [Parameter] public DateTime? DateTo { get; set; }
+    [Parameter] public BooleanFilterType BooleanFilterType { get; set; } = BooleanFilterType.All;
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback<SortFilterResult> OnAccept { get; set; }
+
+    private bool localSortAscending;
+    private string localFilterValue = "";
+    private HashSet<string> localSelectedValues = new();
+    private DateFilterType localDateFilterType = DateFilterType.None;
+    private DateTime? localDateFrom;
+    private DateTime? localDateTo;
+    private BooleanFilterType localBooleanFilterType = BooleanFilterType.All;
+
+    protected override void OnParametersSet()
+    {
+        localSortAscending = SortAscending;
+        localFilterValue = FilterValue;
+        localSelectedValues = new HashSet<string>(SelectedValues);
+        localDateFilterType = DateFilterType;
+        localDateFrom = DateFrom;
+        localDateTo = DateTo;
+        localBooleanFilterType = BooleanFilterType;
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+    private string FormatColumnName(string columnName)
+    {
+        if (string.IsNullOrWhiteSpace(columnName))
+            return columnName;
+
+        var formatted = System.Text.RegularExpressions.Regex.Replace(columnName, "([a-z])([A-Z])", "$1 $2");
+        return char.ToUpper(formatted[0]) + formatted.Substring(1);
+    }
+
+    private void ToggleValue(string value, bool isChecked)
+    {
+        if (isChecked)
+            localSelectedValues.Add(value);
+        else
+            localSelectedValues.Remove(value);
+    }
+
+    private void SelectAllValues()
+    {
+        if (AvailableValues != null)
+            localSelectedValues = new HashSet<string>(AvailableValues);
+    }
+
+    private void ClearAllValues()
+    {
+        localSelectedValues.Clear();
+    }
+
+    private void ClearFilterValue()
+    {
+        localFilterValue = "";
+    }
+
+    private async Task OnDateFilterTypeChanged()
+    {
+        if (localDateFilterType == Models.DateFilterType.CustomRange)
+        {
+            if (!localDateFrom.HasValue)
+                localDateFrom = DateTime.Today;
+            if (!localDateTo.HasValue)
+                localDateTo = DateTime.Today;
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task HandleAccept()
+    {
+        var result = new SortFilterResult
+        {
+            SortAscending = localSortAscending,
+            FilterValue = localFilterValue,
+            SelectedValues = localSelectedValues.ToList(),
+            DateFilterType = localDateFilterType,
+            DateFrom = localDateFrom,
+            DateTo = localDateTo,
+            BooleanFilterType = localBooleanFilterType
+        };
+
+        await OnAccept.InvokeAsync(result);
+    }
+}

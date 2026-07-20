@@ -1,0 +1,119 @@
+@namespace PredatorWeb.Components.Dialogs
+@using PredatorWeb.Models
+
+<div class="modal-overlay" @onclick="OnCancel">
+    <div class="modal-dialog modal-dialog-large" @onclick:stopPropagation="true">
+        <div class="modal-header">
+            <h3>⚙️ Configurar Columnas</h3>
+        </div>
+        <div class="modal-body">
+            <div class="column-config-container">
+                <div class="column-config-header">
+                    <span class="col-drag"></span>
+                    <span class="col-name">Nombre de Columna</span>
+                    <span class="col-visible">Visible</span>
+                </div>
+                @for (int i = 0; i < ColumnConfigs.Count; i++)
+                {
+                    var index = i;
+                    var config = ColumnConfigs[index];
+                    var isDragOver = dragOverIndex == index && draggedIndex != index;
+                    var isDragging = draggedIndex == index;
+
+                    <div class="column-config-row @(isDragOver ? "drag-over" : "") @(isDragging ? "dragging" : "")"
+                         draggable="true"
+                         @ondragstart="@(() => OnDragStart(index))"
+                         @ondragover="@(() => OnDragOver(index))"
+                         @ondragover:preventDefault="true"
+                         @ondrop="@(() => OnDrop(index))"
+                         @ondragend="OnDragEnd"
+                         @ondragleave="OnDragLeave">
+                        <div class="col-drag">
+                            <span class="drag-handle" title="Arrastrar para reordenar">⋮⋮</span>
+                        </div>
+                        <div class="col-name">
+                            <span class="@(config.IsVisible ? "" : "column-hidden")">
+                                @config.DisplayName
+                            </span>
+                        </div>
+                        <div class="col-visible">
+                            <input type="checkbox" 
+                                   checked="@config.IsVisible" 
+                                   @onchange="@(e => ToggleVisibility(index))" />
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-modal btn-cancel" @onclick="OnCancel">Cancelar</button>
+            <button class="btn-modal btn-accept" @onclick="HandleAccept">Aceptar</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<ColumnConfig> ColumnConfigs { get; set; } = new();
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback<List<ColumnConfig>> OnAccept { get; set; }
+
+    private int? draggedIndex = null;
+    private int? dragOverIndex = null;
+
+    private void OnDragStart(int index)
+    {
+        draggedIndex = index;
+    }
+
+    private void OnDragOver(int index)
+    {
+        if (draggedIndex.HasValue && draggedIndex.Value != index)
+        {
+            dragOverIndex = index;
+        }
+    }
+
+    private void OnDrop(int targetIndex)
+    {
+        if (draggedIndex.HasValue && draggedIndex.Value != targetIndex)
+        {
+            var draggedItem = ColumnConfigs[draggedIndex.Value];
+            ColumnConfigs.RemoveAt(draggedIndex.Value);
+
+            if (targetIndex > draggedIndex.Value)
+                targetIndex--;
+
+            ColumnConfigs.Insert(targetIndex, draggedItem);
+
+            // Actualizar DisplayOrder
+            for (int i = 0; i < ColumnConfigs.Count; i++)
+            {
+                ColumnConfigs[i].DisplayOrder = i;
+            }
+        }
+
+        draggedIndex = null;
+        dragOverIndex = null;
+    }
+
+    private void OnDragEnd()
+    {
+        draggedIndex = null;
+        dragOverIndex = null;
+    }
+
+    private void OnDragLeave()
+    {
+        dragOverIndex = null;
+    }
+
+    private void ToggleVisibility(int index)
+    {
+        ColumnConfigs[index].IsVisible = !ColumnConfigs[index].IsVisible;
+    }
+
+    private async Task HandleAccept()
+    {
+        await OnAccept.InvokeAsync(ColumnConfigs);
+    }
+}

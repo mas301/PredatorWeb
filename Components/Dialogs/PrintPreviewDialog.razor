@@ -1,0 +1,153 @@
+@namespace PredatorWeb.Components.Dialogs
+@using System.Data
+
+<div class="modal-overlay print-preview-overlay" @onclick="OnClose">
+    <div class="modal-dialog print-preview-dialog" @onclick:stopPropagation="true">
+        <div class="modal-header no-print">
+            <h3>🖨️ Vista Previa - @Title</h3>
+        </div>
+        <div class="modal-body print-preview-body">
+            <div class="print-preview-content" id="printArea">
+                <div class="print-header">
+                    <h2>@Title</h2>
+                    <p class="print-date">Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+                </div>
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            @foreach (DataColumn column in PreviewData.Columns)
+                            {
+                                <th class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatColumnName(column.ColumnName)</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (DataRow row in PreviewData.Rows)
+                        {
+                            <tr>
+                                @foreach (DataColumn column in PreviewData.Columns)
+                                {
+                                    <td class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatCellValue(row[column])</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="print-totals-row">
+                            @{
+                                var columns = PreviewData.Columns.Cast<DataColumn>().ToList();
+                                var totalColumnsCount = columns.Count;
+                                var colspanForLabel = Math.Min(3, Math.Max(1, totalColumnsCount / 2));
+                                var columnIndex = 0;
+                            }
+
+                            <td class="print-totals-label" colspan="@colspanForLabel">
+                                <strong>TOTALES</strong>
+                            </td>
+
+                            @foreach (var column in columns)
+                            {
+                                columnIndex++;
+                                @if (columnIndex > colspanForLabel)
+                                {
+                                    <td class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                        @if (IsNumericColumn(column))
+                                        {
+                                            <strong>@FormatTotal(GetColumnTotal(column))</strong>
+                                        }
+                                    </td>
+                                }
+                            }
+                        </tr>
+                    </tfoot>
+                </table>
+                <div class="print-footer">
+                    <p>Total de registros: @PreviewData.Rows.Count</p>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer no-print">
+            <button class="btn-modal btn-export" @onclick="OnExport" title="Exportar a Excel">
+                📊 Exportar a Excel
+            </button>
+            <button class="btn-modal btn-print" @onclick="OnPrint" title="Imprimir">
+                🖨️ Imprimir
+            </button>
+            <button class="btn-modal btn-cancel" @onclick="OnClose">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public DataTable PreviewData { get; set; } = new();
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+    [Parameter] public EventCallback OnPrint { get; set; }
+
+    private bool IsNumericColumn(DataColumn column)
+    {
+        var numericTypes = new[]
+        {
+            typeof(int), typeof(long), typeof(short), typeof(byte),
+            typeof(decimal), typeof(double), typeof(float),
+            typeof(int?), typeof(long?), typeof(short?), typeof(byte?),
+            typeof(decimal?), typeof(double?), typeof(float?)
+        };
+        return numericTypes.Contains(column.DataType);
+    }
+
+    private string FormatColumnName(string columnName)
+    {
+        if (string.IsNullOrWhiteSpace(columnName))
+            return columnName;
+
+        var formatted = System.Text.RegularExpressions.Regex.Replace(columnName, "([a-z])([A-Z])", "$1 $2");
+        return char.ToUpper(formatted[0]) + formatted.Substring(1);
+    }
+
+    private string FormatCellValue(object? value)
+    {
+        if (value == null || value == DBNull.Value)
+            return "";
+
+        if (value is DateTime dateValue)
+            return dateValue.ToString("dd/MM/yyyy");
+
+        if (value is bool boolValue)
+            return boolValue ? "✓" : "";
+
+        if (value is decimal || value is double || value is float)
+        {
+            if (decimal.TryParse(value.ToString(), out var numValue))
+                return numValue.ToString("N2");
+        }
+
+        return value.ToString() ?? "";
+    }
+
+    private decimal GetColumnTotal(DataColumn column)
+    {
+        if (!IsNumericColumn(column))
+            return 0;
+
+        decimal total = 0;
+        foreach (DataRow row in PreviewData.Rows)
+        {
+            var value = row[column];
+            if (value != null && value != DBNull.Value)
+            {
+                if (decimal.TryParse(value.ToString(), out var numValue))
+                {
+                    total += numValue;
+                }
+            }
+        }
+        return total;
+    }
+
+    private string FormatTotal(decimal total)
+    {
+        return total.ToString("N2");
+    }
+}

@@ -6,14 +6,10 @@ namespace PredatorWeb.Services;
 public class MenuService
 {
     private readonly Datos _datos;
-    private readonly ILogger<MenuService> _logger;
 
-    public MenuService(Datos datos, ILogger<MenuService> logger)
+    public MenuService(Datos datos)
     {
         _datos = datos;
-        _logger = logger;
-
-        _logger.LogInformation("MenuService inicializado");
     }
 
     public async Task<List<GrlMenu>> GetMenuItemsAsync()
@@ -22,19 +18,14 @@ public class MenuService
 
         try
         {
-            _logger.LogInformation("Intentando conectar a la base de datos...");
-
             using (var connection = _datos.CreateConnection())
             {
                 await connection.OpenAsync();
-                _logger.LogInformation("Conexión establecida exitosamente");
 
                 var query = @"SELECT MenuId, MenuGrupalId, Menu, NombreEntidad, CodigoMenu, Abierto
                              FROM GrlMenu 
                              WHERE MenuGrupalId IS NULL
                              ORDER BY CodigoMenu";
-
-                _logger.LogInformation($"Ejecutando query: {query}");
 
                 using (var reader = await _datos.ExecuteReaderAsync(query, connection))
                 {
@@ -53,16 +44,12 @@ public class MenuService
                         };
 
                         menuItems.Add(menu);
-                        _logger.LogInformation($"Menu item cargado: {menu.Menu} (Código: {menu.CodigoMenu}, NombreEntidad: {menu.NombreEntidad})");
                     }
                 }
             }
-
-            _logger.LogInformation($"Total de items cargados: {menuItems.Count}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error al cargar items del menú desde la base de datos");
             throw;
         }
 
@@ -75,8 +62,6 @@ public class MenuService
 
         try
         {
-            _logger.LogInformation($"Cargando submenús para MenuGrupalId: {menuGrupalId}");
-
             using (var connection = _datos.CreateConnection())
             {
                 await connection.OpenAsync();
@@ -105,16 +90,12 @@ public class MenuService
                         };
 
                         subMenuItems.Add(menu);
-                        _logger.LogInformation($"Submenu item cargado: {menu.Menu} (Código: {menu.CodigoMenu}, NombreEntidad: {menu.NombreEntidad})");
                     }
                 }
             }
-
-            _logger.LogInformation($"Total de subitems cargados: {subMenuItems.Count}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error al cargar subitems del menú para MenuGrupalId {menuGrupalId}");
             throw;
         }
 
