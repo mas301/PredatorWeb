@@ -1360,12 +1360,16 @@
     // Métodos de filtros
     private bool HasActiveFilters()
     {
-        return state.ColumnFilters.Any() || state.DateFilters.Any() || state.BooleanFilters.Any(f => f.Value != BooleanFilterType.All);
+        return state.ColumnFilters.Any() 
+            || state.MultiValueFilters.Any() 
+            || state.DateFilters.Any() 
+            || state.BooleanFilters.Any(f => f.Value != BooleanFilterType.All);
     }
 
     private async Task ClearAllFilters()
     {
         state.ColumnFilters.Clear();
+        state.MultiValueFilters.Clear();
         state.DateFilters.Clear();
         state.BooleanFilters.Clear();
         state.SortColumn = null;
@@ -1382,6 +1386,20 @@
         foreach (var filter in state.ColumnFilters)
         {
             parts.Add($"{filter.Key} contenga '{filter.Value}'");
+        }
+
+        // Filtros multi-valor (checkboxes)
+        foreach (var multiFilter in state.MultiValueFilters)
+        {
+            if (multiFilter.Value.Any())
+            {
+                var values = string.Join(", ", multiFilter.Value.Take(3));
+                if (multiFilter.Value.Count > 3)
+                {
+                    values += $" y {multiFilter.Value.Count - 3} más";
+                }
+                parts.Add($"{multiFilter.Key} sea [{values}]");
+            }
         }
 
         // Filtros de fecha
