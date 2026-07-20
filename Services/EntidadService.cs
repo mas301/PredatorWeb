@@ -29,9 +29,7 @@ namespace PredatorWeb.Services
                 throw new InvalidOperationException($"No se encontró configuración para la entidad: '{nombreEntidad}'");
             }
 
-            // Construir query con filtros
             var query = BuildFilteredQuery(entidad.NombreVista, filters);
-
             var dataTable = await _datos.ExecuteQueryAsync(query);
 
             return dataTable;

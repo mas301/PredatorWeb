@@ -3,6 +3,8 @@
 @using PredatorWeb.Services
 @inject MenuService MenuService
 @inject EntidadService EntidadService
+@inject Datos DatosService
+@inject SessionService SessionService
 @inject ILogger<MainPage> Logger
 @rendermode InteractiveServer
 
@@ -81,6 +83,14 @@
                 <div style="display: @(activeTabIndex == 0 ? "block" : "none")">
                     <div class="login-content">
                         <div class="login-form">
+                            @if (!string.IsNullOrEmpty(loginErrorMessage))
+                            {
+                                <div class="form-group">
+                                    <div style="background-color: #ffebee; color: #c62828; padding: 12px; border-radius: 4px; border: 1px solid #ef5350; margin-bottom: 15px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 11px; line-height: 1.4;">
+                                        <strong>⚠️</strong> @loginErrorMessage
+                                    </div>
+                                </div>
+                            }
                             <div class="form-group">
                                 <label>Código de Empresa:</label>
                                 <input type="text" class="form-control" @bind="companyCode" placeholder="Ingrese el código de empresa" />
@@ -140,6 +150,7 @@
     private string username = "";
     private string password = "";
     private bool rememberCredentials = false;
+    private string loginErrorMessage = "";
     private List<Models.GrlMenu> menuItems = new();
     private List<Models.GrlMenu> subMenuItems = new();
     private List<Models.ListaPage> openTabs = new();
@@ -163,14 +174,129 @@
     {
         try
         {
+            loginErrorMessage = "";
             isLoading = true;
             StateHasChanged();
 
+            // Validar que se hayan ingresado todos los campos
+            if (string.IsNullOrWhiteSpace(companyCode))
+            {
+                loginErrorMessage = "Por favor, ingrese el código de empresa.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                loginErrorMessage = "Por favor, ingrese el nombre de usuario.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                loginErrorMessage = "Por favor, ingrese la contraseña.";
+                return;
+            }
+
+            // Configurar la conexión basada en el código de empresa
+            bool connectionConfigured = await DatosService.ConfigureConnectionByCompanyAsync(companyCode);
+
+            if (!connectionConfigured)
+            {
+                loginErrorMessage = "La empresa no existe. Por favor, verifique el código ingresado.";
+                return;
+            }
+
+            // Validar las credenciales del usuario
+            var userValidationResult = await DatosService.ValidateUserCredentialsAsync(companyCode, username, password);
+
+            if (userValidationResult.Rows.Count == 0)
+            {
+                loginErrorMessage = "El usuario no existe. Por favor, verifique el nombre de usuario ingresado.";
+                DatosService.ResetConnection();
+                return;
+            }
+
+            var validationRow = userValidationResult.Rows[0];
+
+            // Verificar si existe la columna ClaveCorrecta
+            if (!userValidationResult.Columns.Contains("ClaveCorrecta"))
+            {
+                loginErrorMessage = "Error en el procedimiento de validación: no se encontró la columna 'ClaveCorrecta'.";
+                DatosService.ResetConnection();
+                return;
+            }
+
+            bool claveCorrecta = false;
+            var claveCorrectaValue = validationRow["ClaveCorrecta"];
+
+            if (claveCorrectaValue != null && claveCorrectaValue != DBNull.Value)
+            {
+                claveCorrecta = Convert.ToBoolean(claveCorrectaValue);
+            }
+
+            if (!claveCorrecta)
+            {
+                loginErrorMessage = "Contraseña incorrecta. Por favor, verifique sus credenciales.";
+                DatosService.ResetConnection();
+                return;
+            }
+
+            // Verificar si la cuenta del usuario está activa
+            if (userValidationResult.Columns.Contains("Inactivo"))
+            {
+                var inactivoValue = validationRow["Inactivo"];
+                if (inactivoValue != null && inactivoValue != DBNull.Value)
+                {
+                    bool usuarioInactivo = Convert.ToBoolean(inactivoValue);
+                    if (usuarioInactivo)
+                    {
+                        loginErrorMessage = "La cuenta de usuario ha caducado. Por favor, contacte al administrador.";
+                        DatosService.ResetConnection();
+                        return;
+                    }
+                }
+            }
+
+            // Verificar si el usuario tiene acceso a alguna sede
+            if (userValidationResult.Columns.Contains("SedeId"))
+            {
+                var sedeIdValue = validationRow["SedeId"];
+                if (sedeIdValue == null || sedeIdValue == DBNull.Value)
+                {
+                    loginErrorMessage = "El usuario no tiene acceso a ninguna sede. Por favor, contacte al administrador.";
+                    DatosService.ResetConnection();
+                    return;
+                }
+            }
+
+            // Si llegamos aquí, las credenciales son correctas y el usuario tiene acceso
+
+            // Guardar EmpresaId y UsuarioId en la sesión
+            if (userValidationResult.Columns.Contains("EmpresaId"))
+            {
+                var empresaIdValue = validationRow["EmpresaId"];
+                if (empresaIdValue != null && empresaIdValue != DBNull.Value)
+                {
+                    SessionService.EmpresaId = Convert.ToInt32(empresaIdValue);
+                }
+            }
+
+            if (userValidationResult.Columns.Contains("UsuarioId"))
+            {
+                var usuarioIdValue = validationRow["UsuarioId"];
+                if (usuarioIdValue != null && usuarioIdValue != DBNull.Value)
+                {
+                    SessionService.UsuarioId = Convert.ToInt32(usuarioIdValue);
+                }
+            }
+
+            // Cargar el menú
             menuItems = await MenuService.GetMenuItemsAsync();
 
             isLoggedIn = true;
             StateHasChanged();
 
+            // Seleccionar automáticamente el módulo de Ventas si existe
             var ventasModule = menuItems.FirstOrDefault(m => m.Menu.Equals("Ventas", StringComparison.OrdinalIgnoreCase));
             if (ventasModule != null)
             {
@@ -179,7 +305,10 @@
         }
         catch (Exception ex)
         {
+            var innerError = ex.InnerException != null ? $"\nError Interno: {ex.InnerException.Message}" : "";
+            loginErrorMessage = $"Error al iniciar sesión:\n{ex.Message}{innerError}\n\nStack: {ex.StackTrace}";
             menuItems = new List<Models.GrlMenu>();
+            DatosService.ResetConnection();
             StateHasChanged();
         }
         finally
@@ -205,12 +334,10 @@
 
     private void OnSubMenuItemClick(Models.GrlMenu subMenuItem)
     {
-        // Usar NombreEntidad directamente de GrlMenu para resolver la entidad
         var entidad = !string.IsNullOrEmpty(subMenuItem.NombreEntidad) 
             ? EntidadService.GetEntidad(subMenuItem.NombreEntidad) 
             : null;
 
-        // Determinar los valores a usar
         var nombreEntidad = entidad?.NombreEntidad ?? subMenuItem.NombreEntidad;
         var titulo = entidad?.NombrePlural ?? subMenuItem.Menu;
 

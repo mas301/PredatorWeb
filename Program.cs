@@ -7,6 +7,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Register session service (scoped per user connection in Blazor Server)
+builder.Services.AddScoped<SessionService>();
+
 // Register data access layer
 builder.Services.AddScoped<Datos>();
 
@@ -17,6 +20,7 @@ builder.Services.AddSingleton<EntidadResolverService>();
 builder.Services.AddScoped<MenuService>();
 builder.Services.AddScoped<EntidadService>();
 builder.Services.AddScoped<ExcelExportService>();
+builder.Services.AddScoped<ConfigurationService>();
 
 var app = builder.Build();
 
