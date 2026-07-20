@@ -112,7 +112,7 @@
                                    checked="@AreAllSelected()"
                                    @onchange="ToggleSelectAll" />
                          </th>
-                        @foreach (DataColumn column in state.GridData.Columns)
+                        @foreach (DataColumn column in GetOrderedColumns())
                         {
                             @if (!ShouldHideColumn(column.ColumnName))
                             {
@@ -138,7 +138,7 @@
                                                    checked="@IsRowSelected(row)"
                                                    @onchange="@(e => ToggleRowSelection(row, e))" />
                                         </td>
-                                       @foreach (DataColumn column in state.GridData.Columns)
+                                       @foreach (DataColumn column in GetOrderedColumns())
                                        {
                                            @if (!ShouldHideColumn(column.ColumnName))
                                 {
@@ -169,7 +169,7 @@
                             var columnsToSkip = GetTotalLabelColspan() - 1; // -1 porque ya contamos el checkbox
                             var columnIndex = 0;
                         }
-                        @foreach (DataColumn column in state.GridData.Columns)
+                        @foreach (DataColumn column in GetOrderedColumns())
                         {
                             @if (!ShouldHideColumn(column.ColumnName))
                             {
@@ -287,6 +287,145 @@
             </div>
         </div>
     }
+
+    <!-- Diálogo de configuración de columnas -->
+    @if (state.ShowColumnDialog)
+    {
+        <div class="modal-overlay" @onclick="CancelColumnConfig">
+            <div class="modal-dialog modal-dialog-large" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h3>⚙️ Configurar Columnas</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="column-config-container">
+                        <div class="column-config-header">
+                            <span class="col-drag"></span>
+                            <span class="col-name">Nombre de Columna</span>
+                            <span class="col-visible">Visible</span>
+                        </div>
+                        @for (int i = 0; i < state.ColumnConfigs.Count; i++)
+                        {
+                            var index = i;
+                            var config = state.ColumnConfigs[index];
+                            var isDragOver = dragOverColumnIndex == index && draggedColumnIndex != index;
+                            var isDragging = draggedColumnIndex == index;
+
+                            <div class="column-config-row @(isDragOver ? "drag-over" : "") @(isDragging ? "dragging" : "")"
+                                 draggable="true"
+                                 @ondragstart="@(() => OnDragStart(index))"
+                                 @ondragover="@(() => OnDragOver(index))"
+                                 @ondragover:preventDefault="true"
+                                 @ondrop="@(() => OnDrop(index))"
+                                 @ondragend="OnDragEnd"
+                                 @ondragleave="OnDragLeave">
+                                <div class="col-drag">
+                                    <span class="drag-handle" title="Arrastrar para reordenar">⋮⋮</span>
+                                </div>
+                                <div class="col-name">
+                                    <span class="@(config.IsVisible ? "" : "column-hidden")">
+                                        @config.DisplayName
+                                    </span>
+                                </div>
+                                <div class="col-visible">
+                                    <input type="checkbox" 
+                                           checked="@config.IsVisible" 
+                                           @onchange="@(e => ToggleColumnVisibility(index))" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-modal btn-cancel" @onclick="CancelColumnConfig">Cancelar</button>
+                    <button class="btn-modal btn-accept" @onclick="AcceptColumnConfig">Aceptar</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Diálogo de vista previa de impresión -->
+    @if (state.ShowPrintPreview && state.PrintPreviewData != null)
+    {
+        <div class="modal-overlay print-preview-overlay" @onclick="ClosePrintPreview">
+            <div class="modal-dialog print-preview-dialog" @onclick:stopPropagation="true">
+                <div class="modal-header no-print">
+                    <h3>🖨️ Vista Previa - @NombreEntidad</h3>
+                </div>
+                <div class="modal-body print-preview-body">
+                    <div class="print-preview-content" id="printArea">
+                        <div class="print-header">
+                            <h2>@NombreEntidad</h2>
+                            <p class="print-date">Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+                        </div>
+                        <table class="print-table">
+                            <thead>
+                                <tr>
+                                    @foreach (DataColumn column in state.PrintPreviewData.Columns)
+                                    {
+                                        <th class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatColumnName(column.ColumnName)</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (DataRow row in state.PrintPreviewData.Rows)
+                                {
+                                    <tr>
+                                        @foreach (DataColumn column in state.PrintPreviewData.Columns)
+                                        {
+                                            <td class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatCellValue(row[column])</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="print-totals-row">
+                                    @{
+                                        var columns = state.PrintPreviewData.Columns.Cast<DataColumn>().ToList();
+                                        var totalColumnsCount = columns.Count;
+                                        // El colspan será como máximo 3 columnas o la mitad de las columnas totales
+                                        var colspanForLabel = Math.Min(3, Math.Max(1, totalColumnsCount / 2));
+                                        var columnIndex = 0;
+                                    }
+
+                                    @* Primera celda con el label TOTALES que ocupa varias columnas *@
+                                    <td class="print-totals-label" colspan="@colspanForLabel">
+                                        <strong>TOTALES</strong>
+                                    </td>
+
+                                    @* Iterar sobre TODAS las columnas después del colspan *@
+                                    @foreach (var column in columns)
+                                    {
+                                        columnIndex++;
+                                        @if (columnIndex > colspanForLabel)
+                                        {
+                                            <td class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                                @if (IsNumericColumn(column))
+                                                {
+                                                    <strong>@FormatTotal(GetPrintPreviewColumnTotal(column))</strong>
+                                                }
+                                            </td>
+                                        }
+                                    }
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div class="print-footer">
+                            <p>Total de registros: @state.PrintPreviewData.Rows.Count</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer no-print">
+                    <button class="btn-modal btn-export" @onclick="ExportFromPreview" title="Exportar a Excel">
+                        📊 Exportar a Excel
+                    </button>
+                    <button class="btn-modal btn-print" @onclick="PrintFromPreview" title="Imprimir">
+                        🖨️ Imprimir
+                    </button>
+                    <button class="btn-modal btn-cancel" @onclick="ClosePrintPreview">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -295,6 +434,13 @@
 
     // Estado encapsulado de la grilla
     private GridPageState state = new();
+
+    // Backup temporal de la configuración de columnas para "Cancelar"
+    private List<ColumnConfig>? tempColumnConfigsBackup = null;
+
+    // Variables para drag and drop de columnas
+    private int? draggedColumnIndex = null;
+    private int? dragOverColumnIndex = null;
 
     public void Dispose()
     {
@@ -349,6 +495,12 @@
             state.GridData = await loadTask;
 
             state.SelectedRows.Clear();
+
+            // Inicializar configuración de columnas si no existe
+            if (state.GridData != null && state.ColumnConfigs.Count == 0)
+            {
+                InitializeColumnConfigs();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -680,12 +832,6 @@
         return false;
     }
 
-    private bool ShouldHideColumn(string columnName)
-    {
-        // Ocultar columnas que terminan en "Id"
-        return columnName.EndsWith("Id", StringComparison.OrdinalIgnoreCase);
-    }
-
     private string FormatColumnName(string columnName)
     {
         if (string.IsNullOrEmpty(columnName))
@@ -767,6 +913,78 @@
         }
 
         return value.ToString() ?? "";
+    }
+
+    // Sobrecarga para formatear valores sin columna (para vista previa)
+    private string FormatCellValue(object value)
+    {
+        if (value == null || value == DBNull.Value)
+            return "";
+
+        // Formatear fechas
+        if (value is DateTime dateValue)
+        {
+            return dateValue.ToString("dd/MM/yyyy");
+        }
+        // Formatear decimales
+        else if (value is decimal decimalValue)
+        {
+            return decimalValue.ToString("N2");
+        }
+        else if (value is double doubleValue)
+        {
+            return doubleValue.ToString("N2");
+        }
+        else if (value is float floatValue)
+        {
+            return floatValue.ToString("N2");
+        }
+        // Formatear enteros
+        else if (value is int intValue)
+        {
+            return intValue.ToString("N0");
+        }
+        else if (value is long longValue)
+        {
+            return longValue.ToString("N0");
+        }
+        else if (value is short shortValue)
+        {
+            return shortValue.ToString("N0");
+        }
+        // Formatear booleanos
+        else if (value is bool boolValue)
+        {
+            return boolValue ? "Sí" : "No";
+        }
+
+        return value.ToString() ?? "";
+    }
+
+    private decimal GetPrintPreviewColumnTotal(DataColumn column)
+    {
+        if (!IsNumericColumn(column) || state.PrintPreviewData == null)
+            return 0;
+
+        decimal total = 0;
+
+        foreach (DataRow row in state.PrintPreviewData.Rows)
+        {
+            var cellValue = row[column.ColumnName];
+            if (cellValue != null && cellValue != DBNull.Value)
+            {
+                try
+                {
+                    total += Convert.ToDecimal(cellValue);
+                }
+                catch
+                {
+                    // Ignorar valores que no se puedan convertir
+                }
+            }
+        }
+
+        return total;
     }
 
     private decimal GetColumnTotal(DataColumn column)
@@ -997,8 +1215,76 @@
 
     private void OnImprimir()
     {
-        // TODO: Implementar lógica para imprimir
-        Console.WriteLine("Imprimir");
+        if (state.GridData == null || state.GridData.Rows.Count == 0)
+            return;
+
+        try
+        {
+            // Crear una copia del DataTable con TODAS las columnas visibles
+            var previewTable = new DataTable();
+
+            // Agregar solo las columnas visibles en el orden configurado
+            foreach (var column in GetOrderedColumns())
+            {
+                if (!ShouldHideColumn(column.ColumnName))
+                {
+                    previewTable.Columns.Add(column.ColumnName, column.DataType);
+                }
+            }
+
+            // Copiar todas las filas filtradas/ordenadas (sin paginación)
+            foreach (DataRow row in GetFilteredData())
+            {
+                var newRow = previewTable.NewRow();
+                foreach (DataColumn column in previewTable.Columns)
+                {
+                    newRow[column.ColumnName] = row[column.ColumnName];
+                }
+                previewTable.Rows.Add(newRow);
+            }
+
+            // Guardar en el estado y mostrar el diálogo
+            state.PrintPreviewData = previewTable;
+            state.ShowPrintPreview = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al generar vista previa: {ex.Message}");
+        }
+    }
+
+    private void ClosePrintPreview()
+    {
+        state.ShowPrintPreview = false;
+        state.PrintPreviewData = null;
+    }
+
+    private async Task PrintFromPreview()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private async Task ExportFromPreview()
+    {
+        if (state.PrintPreviewData == null)
+            return;
+
+        try
+        {
+            // Generar el archivo Excel desde la vista previa
+            var excelBytes = ExcelExportService.ExportToExcel(state.PrintPreviewData, NombreEntidad ?? "Datos");
+
+            // Descargar el archivo usando JavaScript
+            var fileName = $"{NombreEntidad}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes));
+
+            // Cerrar la vista previa después de exportar
+            ClosePrintPreview();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al exportar desde vista previa: {ex.Message}");
+        }
     }
 
     private void OnImportar()
@@ -1057,14 +1343,154 @@
 
     private void OnColumnas()
     {
-        // TODO: Implementar diálogo de selección de columnas
-        Console.WriteLine("Configurar columnas visibles");
+        // Crear un backup de la configuración actual antes de abrir el diálogo
+        tempColumnConfigsBackup = state.ColumnConfigs.Select(c => new ColumnConfig
+        {
+            ColumnName = c.ColumnName,
+            IsVisible = c.IsVisible,
+            DisplayOrder = c.DisplayOrder
+        }).ToList();
+
+        state.ShowColumnDialog = true;
     }
 
     private void OnPropiedades()
     {
         // TODO: Implementar diálogo de propiedades
         Console.WriteLine("Propiedades");
+    }
+
+    // ===== Métodos para configuración de columnas =====
+
+    private void InitializeColumnConfigs()
+    {
+        if (state.GridData == null) return;
+
+        state.ColumnConfigs.Clear();
+        int order = 0;
+
+        foreach (DataColumn column in state.GridData.Columns)
+        {
+            state.ColumnConfigs.Add(new ColumnConfig
+            {
+                ColumnName = column.ColumnName,
+                IsVisible = !ShouldHideColumn(column.ColumnName),
+                DisplayOrder = order++
+            });
+        }
+    }
+
+    private void ToggleColumnVisibility(int index)
+    {
+        if (index >= 0 && index < state.ColumnConfigs.Count)
+        {
+            state.ColumnConfigs[index].IsVisible = !state.ColumnConfigs[index].IsVisible;
+        }
+    }
+
+    // Métodos de drag and drop para reordenar columnas
+    private void OnDragStart(int index)
+    {
+        draggedColumnIndex = index;
+    }
+
+    private void OnDragOver(int index)
+    {
+        dragOverColumnIndex = index;
+    }
+
+    private void OnDragLeave()
+    {
+        dragOverColumnIndex = null;
+    }
+
+    private void OnDrop(int targetIndex)
+    {
+        if (draggedColumnIndex.HasValue && draggedColumnIndex.Value != targetIndex)
+        {
+            var draggedItem = state.ColumnConfigs[draggedColumnIndex.Value];
+            state.ColumnConfigs.RemoveAt(draggedColumnIndex.Value);
+            state.ColumnConfigs.Insert(targetIndex, draggedItem);
+
+            // Actualizar DisplayOrder
+            for (int i = 0; i < state.ColumnConfigs.Count; i++)
+            {
+                state.ColumnConfigs[i].DisplayOrder = i;
+            }
+        }
+
+        draggedColumnIndex = null;
+        dragOverColumnIndex = null;
+    }
+
+    private void OnDragEnd()
+    {
+        draggedColumnIndex = null;
+        dragOverColumnIndex = null;
+    }
+
+    private void CancelColumnConfig()
+    {
+        state.ShowColumnDialog = false;
+
+        // Restaurar desde el backup (configuración antes de abrir el diálogo)
+        if (tempColumnConfigsBackup != null)
+        {
+            state.ColumnConfigs.Clear();
+            state.ColumnConfigs.AddRange(tempColumnConfigsBackup);
+            tempColumnConfigsBackup = null;
+        }
+    }
+
+    private void AcceptColumnConfig()
+    {
+        state.ShowColumnDialog = false;
+
+        // Limpiar el backup ya que los cambios fueron aceptados
+        tempColumnConfigsBackup = null;
+
+        StateHasChanged();
+    }
+
+    // Método actualizado para verificar si una columna debe ocultarse
+    private bool ShouldHideColumn(string columnName)
+    {
+        // Si hay configuración de columnas, usar esa
+        var config = state.ColumnConfigs.FirstOrDefault(c => c.ColumnName == columnName);
+        if (config != null)
+        {
+            return !config.IsVisible;
+        }
+
+        // Comportamiento por defecto: ocultar columnas que terminan en "Id"
+        return columnName.EndsWith("Id", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Método para obtener el orden de las columnas
+    private IEnumerable<DataColumn> GetOrderedColumns()
+    {
+        if (state.GridData == null) yield break;
+
+        if (state.ColumnConfigs.Count == 0)
+        {
+            // Si no hay configuración, usar orden original
+            foreach (DataColumn column in state.GridData.Columns)
+            {
+                yield return column;
+            }
+        }
+        else
+        {
+            // Usar orden configurado
+            foreach (var config in state.ColumnConfigs.OrderBy(c => c.DisplayOrder))
+            {
+                var column = state.GridData.Columns[config.ColumnName];
+                if (column != null)
+                {
+                    yield return column;
+                }
+            }
+        }
     }
 
     // Métodos de filtros

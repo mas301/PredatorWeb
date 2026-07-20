@@ -46,6 +46,14 @@ public class GridPageState
     // Selección de filas
     public HashSet<DataRow> SelectedRows { get; } = new();
 
+    // Configuración de columnas
+    public bool ShowColumnDialog { get; set; } = false;
+    public List<ColumnConfig> ColumnConfigs { get; set; } = new();
+
+    // Vista previa de impresión
+    public bool ShowPrintPreview { get; set; } = false;
+    public DataTable? PrintPreviewData { get; set; } = null;
+
     // Métodos de utilidad
     public bool HasActiveFilters()
     {
