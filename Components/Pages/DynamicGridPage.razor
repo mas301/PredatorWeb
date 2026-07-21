@@ -1337,7 +1337,22 @@
 
     private async Task OnRefrescar()
     {
-        await LoadDataAsync();
+        // Verificar si hay filtros activos para respetarlos al refrescar
+        bool hasActiveFilters = state.ColumnFilters.Any() ||
+                               state.MultiValueFilters.Any() ||
+                               state.DateFilters.Any() ||
+                               state.BooleanFilters.Any();
+
+        if (hasActiveFilters)
+        {
+            // Si hay filtros, recargar aplicándolos
+            await ReloadDataWithFiltersAsync();
+        }
+        else
+        {
+            // Si no hay filtros, cargar normalmente
+            await LoadDataAsync();
+        }
     }
 
     private void OnColumnas()

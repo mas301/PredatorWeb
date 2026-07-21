@@ -267,5 +267,39 @@ namespace PredatorWeb.Services
 
             return dataTable;
         }
+
+        /// <summary>
+        /// Obtiene las sedes autorizadas para un usuario de una empresa desde la vista GrlSedeVistaLista
+        /// </summary>
+        public async Task<DataTable> GetSedesByUsuarioAsync(int empresaId, int usuarioId)
+        {
+            var dataTable = new DataTable();
+
+            try
+            {
+                var connectionString = GetConnectionString();
+                using var connection = new SqlConnection(connectionString);
+                await connection.OpenAsync();
+
+                var query = "SELECT SedeId, Sede FROM GrlSedeVistaLista WHERE EmpresaId = @EmpresaId AND UsuarioId = @UsuarioId";
+                using var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@EmpresaId", empresaId);
+                command.Parameters.AddWithValue("@UsuarioId", usuarioId);
+
+                using var reader = await command.ExecuteReaderAsync();
+                dataTable.Load(reader);
+            }
+            catch (SqlException sqlEx)
+            {
+                var builder = new SqlConnectionStringBuilder(GetConnectionString());
+                throw new Exception($"Error SQL al obtener sedes en '{builder.DataSource}/{builder.InitialCatalog}': {sqlEx.Message}", sqlEx);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error al obtener sedes del usuario: {ex.Message}", ex);
+            }
+
+            return dataTable;
+        }
     }
 }

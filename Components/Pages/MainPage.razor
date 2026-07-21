@@ -1,10 +1,13 @@
 @page "/"
 @layout SimpleLayout
 @using PredatorWeb.Services
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject MenuService MenuService
 @inject EntidadService EntidadService
 @inject Datos DatosService
 @inject SessionService SessionService
+@inject ProtectedLocalStorage ProtectedLocalStorage
+@inject ProtectedSessionStorage ProtectedSessionStorage
 @inject ILogger<MainPage> Logger
 @rendermode InteractiveServer
 
@@ -93,25 +96,54 @@
                             }
                             <div class="form-group">
                                 <label>Código de Empresa:</label>
-                                <input type="text" class="form-control" @bind="companyCode" placeholder="Ingrese el código de empresa" />
+                                <input type="text" class="form-control" @bind="companyCode" placeholder="Ingrese el código de empresa" autocomplete="off" disabled="@isLoggedIn" />
+                                @if (isLoggedIn && !string.IsNullOrEmpty(companyDisplayName))
+                                {
+                                    <div class="company-display">@companyDisplayName</div>
+                                }
                             </div>
+                            @if (isLoggedIn && sedes != null && sedes.Rows.Count > 0)
+                            {
+                                <div class="form-group">
+                                    <label>Sede:</label>
+                                    <select class="form-control" value="@selectedSedeId" @onchange="OnSedeChanged">
+                                        @foreach (System.Data.DataRow sede in sedes.Rows)
+                                        {
+                                            <option value="@sede["SedeId"]">@sede["Sede"]</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
                             <div class="form-group">
                                 <label>Usuario:</label>
-                                <input type="text" class="form-control" @bind="username" placeholder="Ingrese su usuario" />
+                                <input type="text" class="form-control" @bind="username" placeholder="Ingrese su usuario" autocomplete="off" />
                             </div>
+                            @if (!isLoggedIn)
+                            {
+                                <div class="form-group">
+                                    <label>Contraseña:</label>
+                                    <input type="password" class="form-control" @bind="password" placeholder="Ingrese su contraseña" autocomplete="new-password" />
+                                </div>
+                            }
                             <div class="form-group">
-                                <label>Contraseña:</label>
-                                <input type="password" class="form-control" @bind="password" placeholder="Ingrese su contraseña" />
+                                @if (!isLoggedIn)
+                                {
+                                    <button class="btn-primary" @onclick="OnLoginClick">Iniciar Sesión</button>
+                                }
+                                else
+                                {
+                                    <button class="btn-primary" @onclick="OnLogoutClick">Logout</button>
+                                }
                             </div>
-                            <div class="form-group">
-                                <button class="btn-primary" @onclick="OnLoginClick">Iniciar Sesión</button>
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" @bind="rememberCredentials" />
-                                    Recordar Credenciales
-                                </label>
-                            </div>
+                            @if (!isLoggedIn)
+                            {
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" @bind="rememberCredentials" />
+                                        Recordar Credenciales
+                                    </label>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -159,10 +191,76 @@
     private bool isLoggedIn = false;
     private string? selectedModuleName = null;
     private bool showModulesDropdown = false;
+    private string companyDisplayName = "";
+    private System.Data.DataTable? sedes = null;
+    private int? selectedSedeId = null;
+
+    private const string CredentialsStorageKey = "predator_credentials";
+    private const string SedeStorageKey = "predator_sede_id";
 
     protected override Task OnInitializedAsync()
     {
         return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadSavedCredentialsAsync();
+        }
+    }
+
+    private async Task LoadSavedCredentialsAsync()
+    {
+        try
+        {
+            var result = await ProtectedLocalStorage.GetAsync<SavedCredentials>(CredentialsStorageKey);
+            if (result.Success && result.Value is not null)
+            {
+                companyCode = result.Value.CompanyCode;
+                username = result.Value.Username;
+                password = result.Value.Password;
+                rememberCredentials = true;
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Si falla la lectura (datos corruptos o clave cambiada), se ignora
+        }
+    }
+
+    private async Task SaveOrClearCredentialsAsync()
+    {
+        try
+        {
+            if (rememberCredentials)
+            {
+                var credentials = new SavedCredentials
+                {
+                    CompanyCode = companyCode,
+                    Username = username,
+                    Password = password
+                };
+                await ProtectedLocalStorage.SetAsync(CredentialsStorageKey, credentials);
+            }
+            else
+            {
+                await ProtectedLocalStorage.DeleteAsync(CredentialsStorageKey);
+            }
+        }
+        catch
+        {
+            // Se ignoran errores de almacenamiento para no interrumpir el login
+        }
+    }
+
+    private sealed class SavedCredentials
+    {
+        public string CompanyCode { get; set; } = "";
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
     }
 
     private void ToggleModulesDropdown()
@@ -271,6 +369,9 @@
 
             // Si llegamos aquí, las credenciales son correctas y el usuario tiene acceso
 
+            // Guardar o limpiar las credenciales según el checkbox "Recordar Credenciales"
+            await SaveOrClearCredentialsAsync();
+
             // Guardar EmpresaId y UsuarioId en la sesión
             if (userValidationResult.Columns.Contains("EmpresaId"))
             {
@@ -292,6 +393,62 @@
 
             // Cargar el menú
             menuItems = await MenuService.GetMenuItemsAsync();
+
+            // Determinar el nombre a mostrar de la empresa
+            companyDisplayName = GetCompanyDisplayName(userValidationResult, validationRow);
+
+            // Cargar las sedes autorizadas para el usuario
+            if (SessionService.EmpresaId.HasValue && SessionService.UsuarioId.HasValue)
+            {
+                sedes = await DatosService.GetSedesByUsuarioAsync(SessionService.EmpresaId.Value, SessionService.UsuarioId.Value);
+                if (sedes != null && sedes.Rows.Count > 0)
+                {
+                    // Intentar restaurar la sede persistida de la sesión
+                    int? sedePersistida = null;
+                    try
+                    {
+                        var sedeResult = await ProtectedSessionStorage.GetAsync<int>(SedeStorageKey);
+                        if (sedeResult.Success)
+                        {
+                            sedePersistida = sedeResult.Value;
+                        }
+                    }
+                    catch { }
+
+                    // Usar la sede persistida si sigue siendo válida; si no, la primera
+                    bool sedeValida = false;
+                    if (sedePersistida.HasValue)
+                    {
+                        foreach (System.Data.DataRow r in sedes.Rows)
+                        {
+                            if (r["SedeId"] != DBNull.Value && Convert.ToInt32(r["SedeId"]) == sedePersistida.Value)
+                            {
+                                sedeValida = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (sedeValida)
+                    {
+                        selectedSedeId = sedePersistida;
+                    }
+                    else
+                    {
+                        var primeraSede = sedes.Rows[0]["SedeId"];
+                        if (primeraSede != null && primeraSede != DBNull.Value)
+                        {
+                            selectedSedeId = Convert.ToInt32(primeraSede);
+                        }
+                    }
+
+                    SessionService.SedeId = selectedSedeId;
+                    if (selectedSedeId.HasValue)
+                    {
+                        await ProtectedSessionStorage.SetAsync(SedeStorageKey, selectedSedeId.Value);
+                    }
+                }
+            }
 
             isLoggedIn = true;
             StateHasChanged();
@@ -316,6 +473,70 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+
+    private async Task OnLogoutClick()
+    {
+        // Ocultar la empresa y restaurar el estado del formulario
+        isLoggedIn = false;
+        companyDisplayName = "";
+        sedes = null;
+        selectedSedeId = null;
+
+        // Limpiar menús y pestañas abiertas
+        menuItems = new List<Models.GrlMenu>();
+        subMenuItems = new List<Models.GrlMenu>();
+        openTabs = new List<Models.ListaPage>();
+        activeTabIndex = 0;
+        selectedModuleName = null;
+        showModulesDropdown = false;
+        loginErrorMessage = "";
+
+        // Borrar los datos persistentes de la sesión
+        SessionService.EmpresaId = null;
+        SessionService.UsuarioId = null;
+        SessionService.SedeId = null;
+        SessionService.IsLoggedIn = false;
+        SessionService.CompanyCode = null;
+        SessionService.Username = null;
+
+        // Restablecer la conexión de datos
+        DatosService.ResetConnection();
+
+        // Borrar la sede persistida en la sesión
+        await ProtectedSessionStorage.DeleteAsync(SedeStorageKey);
+
+        StateHasChanged();
+    }
+
+    private async Task OnSedeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var sedeId))
+        {
+            selectedSedeId = sedeId;
+            SessionService.SedeId = sedeId;
+            await ProtectedSessionStorage.SetAsync(SedeStorageKey, sedeId);
+        }
+    }
+
+    private string GetCompanyDisplayName(System.Data.DataTable validationResult, System.Data.DataRow validationRow)
+    {
+        // El nombre de la empresa proviene de la columna "Empresa" del resultado de GrlUsuariosMantenimiento
+        if (validationResult.Columns.Contains("Empresa"))
+        {
+            var valor = validationRow["Empresa"];
+            if (valor != null && valor != DBNull.Value)
+            {
+                var texto = valor.ToString();
+                if (!string.IsNullOrWhiteSpace(texto))
+                {
+                    return texto;
+                }
+            }
+        }
+
+        // Respaldo: mostrar el código de empresa ingresado
+        return companyCode;
     }
 
     private async Task OnModuleSelected(Models.GrlMenu module)

@@ -34,5 +34,10 @@ namespace PredatorWeb.Services
         /// ID del usuario (UsuarioId) obtenido en el login
         /// </summary>
         public int? UsuarioId { get; set; }
+
+        /// <summary>
+        /// ID de la sede seleccionada por el usuario
+        /// </summary>
+        public int? SedeId { get; set; }
     }
 }
