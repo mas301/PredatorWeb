@@ -52,6 +52,14 @@ public class GridPageState
     // Selección de filas
     public HashSet<DataRow> SelectedRows { get; } = new();
 
+    // Paginación
+    public int CurrentPage { get; set; } = 1;
+    public int PageSize { get; set; } = 100;
+    public int TotalPages => GridData == null || GridData.Rows.Count == 0 
+        ? 1 
+        : (int)Math.Ceiling((double)GridData.Rows.Count / PageSize);
+    public bool ShowPagination => GridData != null && GridData.Rows.Count > PageSize;
+
     // Configuración de columnas
     public bool ShowColumnDialog { get; set; } = false;
     public List<ColumnConfig> ColumnConfigs { get; set; } = new();

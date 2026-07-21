@@ -459,6 +459,23 @@ input[type="checkbox"] {
     margin: 0 5px;
 }
 
+.toolbar-btn-nav {
+    min-width: 60px;
+}
+
+.toolbar-page-info {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    background-color: #e9ecef;
+    border-radius: 4px;
+    height: 48px;
+    white-space: nowrap;
+}
+
 .btn-icon {
     font-size: 18px;
     margin-bottom: 4px;
@@ -674,6 +691,55 @@ input[type="checkbox"] {
     font-size: 14px;
     color: #333;
     font-weight: 600;
+    padding: 12px 16px;
+    white-space: nowrap;
+}
+
+.totals-content {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: nowrap;
+}
+
+.totals-text-nowrap {
+    white-space: nowrap;
+}
+
+.totals-separator {
+    color: #adb5bd;
+    font-weight: normal;
+}
+
+.totals-page-size {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.totals-page-size label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+}
+
+.totals-page-size select {
+    padding: 5px 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    background-color: white;
+    font-weight: normal;
+    min-width: 70px;
+}
+
+.totals-page-size select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 /* Modal styles */

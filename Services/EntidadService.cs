@@ -18,11 +18,24 @@ namespace PredatorWeb.Services
 
         public async Task<DataTable> GetEntidadDataAsync(string nombreEntidad)
         {
-            return await GetEntidadDataAsync(nombreEntidad, null);
+            return await GetEntidadDataAsync(nombreEntidad, null, CancellationToken.None);
         }
 
         public async Task<DataTable> GetEntidadDataAsync(string nombreEntidad, ServerFilter? filters)
         {
+            return await GetEntidadDataAsync(nombreEntidad, filters, CancellationToken.None);
+        }
+
+        public async Task<DataTable> GetEntidadDataAsync(string nombreEntidad, CancellationToken cancellationToken)
+        {
+            return await GetEntidadDataAsync(nombreEntidad, null, cancellationToken);
+        }
+
+        public async Task<DataTable> GetEntidadDataAsync(string nombreEntidad, ServerFilter? filters, CancellationToken cancellationToken)
+        {
+            // Verificar cancelación antes de comenzar
+            cancellationToken.ThrowIfCancellationRequested();
+
             var entidad = _entidadResolver.GetEntidadInstance(nombreEntidad);
             if (entidad == null)
             {
@@ -30,7 +43,11 @@ namespace PredatorWeb.Services
             }
 
             var query = BuildFilteredQuery(entidad.NombreVista, filters);
-            var dataTable = await _datos.ExecuteQueryAsync(query);
+
+            // Verificar cancelación antes de ejecutar la consulta
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var dataTable = await _datos.ExecuteQueryAsync(query, cancellationToken);
 
             return dataTable;
         }

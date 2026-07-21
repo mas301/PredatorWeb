@@ -111,23 +111,142 @@ namespace PredatorWeb.Services
         /// </summary>
         public async Task<DataTable> ExecuteQueryAsync(string query, params SqlParameter[] parameters)
         {
+            return await ExecuteQueryAsync(query, CancellationToken.None, parameters);
+        }
+
+        /// <summary>
+        /// Ejecuta una consulta SELECT y devuelve un DataTable con soporte para cancelación
+        /// </summary>
+        public async Task<DataTable> ExecuteQueryAsync(string query, CancellationToken cancellationToken, params SqlParameter[] parameters)
+        {
             var dataTable = new DataTable();
+            SqlConnection? connection = null;
+            SqlCommand? command = null;
+            bool isCancelled = false;
 
             try
             {
-                var connectionString = GetConnectionString();
-                using var connection = new SqlConnection(connectionString);
-                await connection.OpenAsync();
+                // Verificar cancelación antes de iniciar
+                cancellationToken.ThrowIfCancellationRequested();
 
-                using var command = new SqlCommand(query, connection);
+                var connectionString = GetConnectionString();
+                connection = new SqlConnection(connectionString);
+
+                await connection.OpenAsync(cancellationToken);
+
+                // Verificar cancelación después de abrir conexión
+                cancellationToken.ThrowIfCancellationRequested();
+
+                command = new SqlCommand(query, connection);
+
+                // Timeout más corto para permitir cancelación más rápida
+                command.CommandTimeout = 30; // 30 segundos
+
                 if (parameters != null && parameters.Length > 0)
                 {
                     command.Parameters.AddRange(parameters);
                 }
 
-                // Usar SqlDataReader en lugar de SqlDataAdapter para operaciones verdaderamente async
-                using var reader = await command.ExecuteReaderAsync();
-                dataTable.Load(reader);
+                // Registrar la cancelación para cancelar el comando SQL inmediatamente
+                using var registration = cancellationToken.Register(() =>
+                {
+                    try
+                    {
+                        isCancelled = true;
+                        // Cancelar el comando SQL en ejecución
+                        command?.Cancel();
+                        // También cerrar la conexión para forzar la terminación
+                        try { connection?.Close(); } catch { }
+                    }
+                    catch
+                    {
+                        // Ignorar errores al cancelar
+                    }
+                });
+
+                // Ejecutar el reader
+                using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+                // Verificar cancelación antes de cargar
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Cargar datos con verificación de cancelación
+                if (isCancelled)
+                {
+                    throw new OperationCanceledException("La operación fue cancelada antes de cargar los datos.");
+                }
+
+                // Crear esquema del DataTable desde el reader
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    dataTable.Columns.Add(reader.GetName(i), reader.GetFieldType(i));
+                }
+
+                // Cargar filas con verificación de cancelación cada 100 filas
+                int rowCount = 0;
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var row = dataTable.NewRow();
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        row[i] = reader.IsDBNull(i) ? DBNull.Value : reader.GetValue(i);
+                    }
+                    dataTable.Rows.Add(row);
+
+                    rowCount++;
+
+                    // Verificar cancelación cada 100 filas para mejor rendimiento
+                    if (rowCount % 100 == 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                }
+
+                // Verificar cancelación después de cargar
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException)
+            {
+                // Si se canceló pero ya hay datos cargados, retornarlos
+                if (dataTable.Rows.Count > 0)
+                {
+                    return dataTable;
+                }
+                // Si no hay datos, re-lanzar la excepción
+                throw;
+            }
+            catch (SqlException sqlEx) when (sqlEx.Number == -2 || sqlEx.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                // Timeout o cancelación - retornar datos parciales si existen
+                if (dataTable.Rows.Count > 0)
+                {
+                    return dataTable;
+                }
+                throw new OperationCanceledException("La consulta SQL fue cancelada.", sqlEx);
+            }
+            catch (InvalidOperationException ioEx) when (isCancelled || 
+                                                         ioEx.Message.Contains("cancel", StringComparison.OrdinalIgnoreCase) || 
+                                                         ioEx.Message.Contains("closed", StringComparison.OrdinalIgnoreCase) ||
+                                                         ioEx.Message.Contains("terminado", StringComparison.OrdinalIgnoreCase) ||
+                                                         ioEx.Message.Contains("conexión", StringComparison.OrdinalIgnoreCase))
+            {
+                // La conexión fue cerrada durante la cancelación - retornar datos parciales si existen
+                if (dataTable.Rows.Count > 0)
+                {
+                    return dataTable;
+                }
+                throw new OperationCanceledException("La consulta SQL fue cancelada.", ioEx);
+            }
+            catch (Exception ex) when (isCancelled)
+            {
+                // Cualquier excepción si fue cancelado - retornar datos parciales si existen
+                if (dataTable.Rows.Count > 0)
+                {
+                    return dataTable;
+                }
+                throw new OperationCanceledException("La consulta SQL fue cancelada.", ex);
             }
             catch (SqlException sqlEx)
             {
@@ -137,6 +256,19 @@ namespace PredatorWeb.Services
             catch (Exception ex)
             {
                 throw new Exception($"Error al ejecutar consulta: {ex.Message}", ex);
+            }
+            finally
+            {
+                try
+                {
+                    command?.Dispose();
+                    if (connection?.State == System.Data.ConnectionState.Open)
+                    {
+                        connection?.Close();
+                    }
+                    connection?.Dispose();
+                }
+                catch { }
             }
 
             return dataTable;

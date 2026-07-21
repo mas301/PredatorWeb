@@ -98,6 +98,39 @@
                 <span class="btn-icon">⚙️</span>
                 <span class="btn-text">Propied</span>
             </button>
+
+            @if (state.ShowPagination)
+            {
+                <div class="toolbar-separator"></div>
+                <button class="toolbar-btn toolbar-btn-nav" 
+                        @onclick="FirstPage" 
+                        disabled="@(state.CurrentPage == 1)"
+                        title="Primera página">
+                    <span class="btn-icon">⏮</span>
+                    <span class="btn-text">Primera</span>
+                </button>
+                <button class="toolbar-btn toolbar-btn-nav" 
+                        @onclick="PreviousPage" 
+                        disabled="@(state.CurrentPage == 1)"
+                        title="Página anterior">
+                    <span class="btn-icon">◀</span>
+                    <span class="btn-text">Anterior</span>
+                </button>
+                <button class="toolbar-btn toolbar-btn-nav" 
+                        @onclick="NextPage" 
+                        disabled="@(state.CurrentPage >= state.TotalPages)"
+                        title="Página siguiente">
+                    <span class="btn-icon">▶</span>
+                    <span class="btn-text">Siguiente</span>
+                </button>
+                <button class="toolbar-btn toolbar-btn-nav" 
+                        @onclick="LastPage" 
+                        disabled="@(state.CurrentPage >= state.TotalPages)"
+                        title="Última página">
+                    <span class="btn-icon">⏭</span>
+                    <span class="btn-text">Última</span>
+                </button>
+            }
         </div>
 
         <!-- Barra de filtros -->
@@ -190,7 +223,25 @@
                 <tfoot>
                     <tr class="totals-row">
                         <td class="totals-label" colspan="@GetTotalLabelColspan()">
-                            Total de registros: @GetFilteredData().Count()
+                            <div class="totals-content">
+                                <span class="totals-text-nowrap">
+                                    Total de registros: @GetFilteredData().Count()@(state.ShowPagination ? $" (Página {state.CurrentPage} de {state.TotalPages})" : "")
+                                </span>
+                                @if (state.ShowPagination)
+                                {
+                                    <span class="totals-separator">|</span>
+                                    <span class="totals-page-size">
+                                        <label>Reg. x Pág.:</label>
+                                        <select @onchange="OnPageSizeChanged" value="@state.PageSize">
+                                            <option value="50">50</option>
+                                            <option value="100">100</option>
+                                            <option value="250">250</option>
+                                            <option value="500">500</option>
+                                            <option value="1000">1000</option>
+                                        </select>
+                                    </span>
+                                }
+                            </div>
                         </td>
                         @{
                             var columnsToSkip = GetTotalLabelColspan() - 1; // -1 porque ya contamos el checkbox
@@ -286,10 +337,19 @@
 
     private bool _hasLoaded = false;
 
+    // Helper para logging en navegador
+    private async Task LogToConsole(string message)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", message);
+        }
+        catch { }
+    }
+
     protected override async Task OnInitializedAsync()
     {
-        // Cargar configuración guardada si existe
-        await LoadGridConfigurationAsync();
+        // No hacer nada aquí, todo se maneja en OnParametersSetAsync
     }
 
     // Variable temporal para almacenar la configuración antes de aplicarla
@@ -303,20 +363,22 @@
             _hasLoaded = true;
             _lastLoadedEntity = NombreEntidad;
 
-            // Verificar si hay filtros activos después de cargar la configuración
+            // PRIMERO: Cargar configuración guardada
+            await LoadGridConfigurationAsync();
+
+            // SEGUNDO: Verificar si hay filtros activos después de cargar la configuración
             bool hasActiveFilters = state.ColumnFilters.Any() || 
                                    state.MultiValueFilters.Any() || 
                                    state.DateFilters.Any() || 
                                    state.BooleanFilters.Any();
 
+            // TERCERO: Cargar datos con o sin filtros
             if (hasActiveFilters)
             {
-                // Si hay filtros, usar el método que los aplica
                 await ReloadDataWithFiltersAsync();
             }
             else
             {
-                // Si no hay filtros, cargar normalmente
                 await LoadDataAsync();
             }
         }
@@ -328,6 +390,8 @@
     {
         if (string.IsNullOrEmpty(NombreEntidad))
             return;
+
+        await LogToConsole($"🟢 LoadDataAsync iniciado para: {NombreEntidad}");
 
         // Cancelar cualquier carga anterior en progreso
         state.CancellationTokenSource?.Cancel();
@@ -348,12 +412,38 @@
         try
         {
             var token = state.CancellationTokenSource.Token;
+            await LogToConsole($"🟢 Token creado - IsCancellationRequested: {token.IsCancellationRequested}");
 
             // Iniciar simulación de progreso en paralelo
             var progressTask = SimulateProgress(token);
 
-            var loadTask = EntidadService.GetEntidadDataAsync(NombreEntidad);
+            await LogToConsole($"🟢 Antes de llamar GetEntidadDataAsync");
+
+            // **CRÍTICO**: Ejecutar en Task.Run() para no bloquear el circuito de Blazor
+            // Esto permite que los eventos de UI (como el botón Cancelar) se procesen
+            var loadTask = Task.Run(async () =>
+            {
+                Console.WriteLine($"🟡 Dentro de Task.Run - IsCancellationRequested: {token.IsCancellationRequested}");
+                try
+                {
+                    var result = await EntidadService.GetEntidadDataAsync(NombreEntidad, token);
+                    Console.WriteLine($"🟡 EntidadService completado en Task.Run - Filas: {result.Rows.Count}");
+                    return result;
+                }
+                catch (OperationCanceledException)
+                {
+                    Console.WriteLine($"🔴 OperationCanceledException capturada en Task.Run");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"🔴 Exception en Task.Run: {ex.GetType().Name} - {ex.Message}");
+                    throw;
+                }
+            }, token);
+
             state.GridData = await loadTask;
+            await LogToConsole($"🟢 GetEntidadDataAsync completado - Filas: {state.GridData?.Rows.Count ?? 0}");
 
             state.SelectedRows.Clear();
 
@@ -367,22 +457,36 @@
         }
         catch (OperationCanceledException)
         {
-            state.ErrorMessage = "La carga de datos fue cancelada por el usuario.";
-            state.GridData = null;
+            Console.WriteLine("🔴 OperationCanceledException capturada en LoadDataAsync");
+            await LogToConsole("🔴 OperationCanceledException capturada en LoadDataAsync");
+            // No mostrar error cuando el usuario cancela
+            // No limpiar GridData porque puede tener datos parciales
+            state.ErrorMessage = null;
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"🔴 Exception capturada: {ex.GetType().Name} - {ex.Message}");
+            await LogToConsole($"🔴 Exception capturada: {ex.GetType().Name} - {ex.Message}");
             state.ErrorMessage = ex.Message;
             state.StackTrace = ex.StackTrace;
         }
         finally
         {
+            Console.WriteLine($"🟢 LoadDataAsync finally - IsLoading: {state.IsLoading}");
+            await LogToConsole($"🟢 LoadDataAsync finally - IsLoading: {state.IsLoading}");
+
+            // Forzar cierre del diálogo y actualizar UI
             state.IsLoading = false;
             state.ShowLoadingDialog = false;
             state.ProgressPercentage = 100;
             state.CancellationTokenSource?.Dispose();
             state.CancellationTokenSource = null;
-            StateHasChanged();
+
+            // CRÍTICO: Usar InvokeAsync para asegurar que StateHasChanged se ejecuta en el contexto correcto
+            await InvokeAsync(StateHasChanged);
+
+            Console.WriteLine("🟢 LoadDataAsync finally completado");
+            await LogToConsole("🟢 LoadDataAsync finally completado");
         }
     }
 
@@ -409,12 +513,81 @@
 
     private void CancelLoading()
     {
-        state.CancellationTokenSource?.Cancel();
+        try
+        {
+            // Log síncrono a consola del servidor
+            Console.WriteLine("🔴 CancelLoading llamado");
+
+            if (state.CancellationTokenSource != null)
+            {
+                Console.WriteLine($"🔴 Token antes: {state.CancellationTokenSource.Token.IsCancellationRequested}");
+
+                // Cancelar el token - CRÍTICO: hacer esto de forma síncrona
+                try
+                {
+                    state.CancellationTokenSource.Cancel();
+                    Console.WriteLine($"🔴 Cancel() ejecutado");
+                }
+                catch (ObjectDisposedException ex)
+                {
+                    Console.WriteLine($"🔴 ObjectDisposedException: {ex.Message}");
+                }
+                catch (AggregateException ex)
+                {
+                    Console.WriteLine($"🔴 AggregateException: {ex.Message}");
+                }
+
+                Console.WriteLine($"🔴 Token después: {state.CancellationTokenSource.Token.IsCancellationRequested}");
+            }
+            else
+            {
+                Console.WriteLine("🔴 CancellationTokenSource es NULL");
+            }
+
+            // Actualizar mensaje - no usar await aquí
+            state.LoadingMessage = "Cancelando operación...";
+
+            // Invocar StateHasChanged de forma síncrona si es posible
+            try
+            {
+                StateHasChanged();
+            }
+            catch
+            {
+                // Si falla, intentar con InvokeAsync en background
+                _ = InvokeAsync(StateHasChanged);
+            }
+
+            Console.WriteLine("🔴 CancelLoading completado");
+
+            // Log al navegador de forma asíncrona sin bloquear
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("console.log", "🔴 CancelLoading ejecutado y token cancelado");
+                }
+                catch { }
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"🔴 ERROR en CancelLoading: {ex}");
+        }
     }
 
     private IEnumerable<DataRow> GetPagedData()
     {
-        return GetFilteredData();
+        var allData = GetFilteredData();
+
+        // Aplicar paginación
+        if (state.GridData != null && state.ShowPagination)
+        {
+            int skip = (state.CurrentPage - 1) * state.PageSize;
+            return allData.Skip(skip).Take(state.PageSize);
+        }
+
+        return allData;
     }
 
     private IEnumerable<DataRow> GetFilteredData()
@@ -672,8 +845,8 @@
                 };
             }
 
-            // Cargar datos con filtros
-            state.GridData = await EntidadService.GetEntidadDataAsync(NombreEntidad, serverFilter);
+            // Cargar datos con filtros Y cancellation token
+            state.GridData = await EntidadService.GetEntidadDataAsync(NombreEntidad, serverFilter, token);
             state.SelectedRows.Clear();
 
             // Inicializar configuración de columnas si no existe
@@ -686,8 +859,9 @@
         }
         catch (OperationCanceledException)
         {
-            state.ErrorMessage = "La carga de datos fue cancelada por el usuario.";
-            state.GridData = null;
+            // No mostrar error cuando el usuario cancela
+            // No limpiar GridData porque puede tener datos parciales
+            state.ErrorMessage = null;
         }
         catch (Exception ex)
         {
@@ -1032,9 +1206,11 @@
         var visibleColumnsCount = state.GridData.Columns.Cast<DataColumn>()
             .Count(col => !ShouldHideColumn(col.ColumnName));
 
-        // El label ocupará como máximo 3 columnas (checkbox + 2 columnas de datos)
-        // o la mitad de las columnas visibles, lo que sea menor
-        var maxColspan = Math.Min(3, Math.Max(1, visibleColumnsCount / 2));
+        // El label ocupará más columnas cuando hay paginación para evitar wrap
+        // Mínimo 4 columnas, o hasta un tercio de las columnas visibles
+        var maxColspan = state.ShowPagination 
+            ? Math.Min(6, Math.Max(4, visibleColumnsCount / 3))
+            : Math.Min(3, Math.Max(1, visibleColumnsCount / 2));
 
         // +1 para incluir la columna del checkbox
         return maxColspan + 1;
@@ -1721,4 +1897,42 @@
             Console.WriteLine($"Error al guardar configuración: {ex.Message}");
         }
     }
-}
+
+    // ===== MÉTODOS DE PAGINACIÓN =====
+
+    private void FirstPage()
+    {
+        state.CurrentPage = 1;
+    }
+
+    private void PreviousPage()
+    {
+        if (state.CurrentPage > 1)
+        {
+            state.CurrentPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (state.CurrentPage < state.TotalPages)
+        {
+            state.CurrentPage++;
+        }
+    }
+
+    private void LastPage()
+    {
+        state.CurrentPage = state.TotalPages;
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newSize))
+        {
+            state.PageSize = newSize;
+            state.CurrentPage = 1; // Volver a la primera página
+        }
+    }
+
+    }
