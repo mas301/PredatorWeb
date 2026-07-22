@@ -8,9 +8,12 @@ public class ColumnConfig
     public required string ColumnName { get; set; }
     public bool IsVisible { get; set; } = true;
     public int DisplayOrder { get; set; }
+    public bool ShowTotal { get; set; } = false;
+    public bool IsNumeric { get; set; } = false;
+    public string? CustomTitle { get; set; }
 
-    // Nombre formateado para mostrar en UI
-    public string DisplayName => FormatColumnName(ColumnName);
+    // Nombre formateado para mostrar en UI (usa CustomTitle si existe, sino formatea ColumnName)
+    public string DisplayName => !string.IsNullOrWhiteSpace(CustomTitle) ? CustomTitle : FormatColumnName(ColumnName);
 
     private string FormatColumnName(string columnName)
     {

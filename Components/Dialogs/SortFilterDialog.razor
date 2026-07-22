@@ -149,8 +149,8 @@
             }
         </div>
         <div class="modal-footer">
+            <button class="btn-modal btn-clear" @onclick="HandleClear" disabled="@(!HasActiveFilters())">Limpiar</button>
             <button class="btn-modal btn-cancel" @onclick="OnCancel">Cancelar</button>
-            <button class="btn-modal btn-clear" @onclick="HandleClear">Limpiar</button>
             <button class="btn-modal btn-accept" @onclick="HandleAccept">Aceptar</button>
         </div>
     </div>
@@ -252,6 +252,31 @@
     {
         localBooleanYes = false;
         localBooleanNo = false;
+    }
+
+    private bool HasActiveFilters()
+    {
+        // Verificar filtro de texto legacy
+        if (!string.IsNullOrWhiteSpace(localFilterValue))
+            return true;
+
+        // Verificar filtro multi-valor
+        if (localSelectedValues.Any())
+            return true;
+
+        // Verificar filtro de fecha
+        if (localDateFilterType != DateFilterType.None)
+            return true;
+
+        // Verificar filtro booleano
+        if (localBooleanFilterType != BooleanFilterType.All)
+            return true;
+
+        // Verificar filtro numérico
+        if (localNumericFilterType != NumericFilterType.None)
+            return true;
+
+        return false;
     }
 
     private string GetNumericLabel1()

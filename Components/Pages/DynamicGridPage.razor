@@ -5,7 +5,7 @@
 @inject Services.ExcelExportService ExcelExportService
 @inject Services.ConfigurationService ConfigurationService
 @inject IJSRuntime JSRuntime
-@implements IDisposable
+@implements IAsyncDisposable
 
 <div class="grid-container">
     <!-- Diálogo de carga - SIEMPRE visible si está cargando -->
@@ -162,7 +162,7 @@
                             {
                                 <th class="@(IsNumericColumn(column) ? "text-right" : "")">
                                     <div class="th-container">
-                                        <span class="th-title">@FormatColumnName(column.ColumnName)</span>
+                                        <span class="th-title">@GetColumnDisplayName(column.ColumnName)</span>
                                         <div class="th-icons">
                                             <span class="th-icon filter-icon @(HasActiveFilter(column.ColumnName) ? "active" : "")" 
                                                   @onclick="@(() => ShowFilterDialog(column.ColumnName))"
@@ -276,7 +276,7 @@
                                 @if (columnIndex > columnsToSkip)
                                 {
                                     <td class="@(IsNumericColumn(column) ? "text-right" : "")">
-                                        @if (IsNumericColumn(column))
+                                        @if (ShouldShowTotal(column.ColumnName))
                                         {
                                             @FormatTotal(GetColumnTotal(column))
                                         }
@@ -353,10 +353,13 @@
     // Backup temporal de la configuración de columnas para "Cancelar"
     private List<ColumnConfig>? tempColumnConfigsBackup = null;
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        await LogToConsole($"🔴 Cerrando pestaña {NombreEntidad}");
+
         // Guardar configuración antes de disponer
-        _ = SaveGridConfigurationAsync();
+        await SaveGridConfigurationAsync();
+
         state.Dispose();
     }
 
@@ -1179,6 +1182,16 @@
         return result.ToString();
     }
 
+    private string GetColumnDisplayName(string columnName)
+    {
+        var config = state.ColumnConfigs.FirstOrDefault(c => c.ColumnName == columnName);
+        if (config != null)
+        {
+            return config.DisplayName;
+        }
+        return FormatColumnName(columnName);
+    }
+
     private bool IsNumericColumn(DataColumn column)
     {
         return column.DataType == typeof(decimal) ||
@@ -1187,6 +1200,12 @@
                column.DataType == typeof(int) ||
                column.DataType == typeof(long) ||
                column.DataType == typeof(short);
+    }
+
+    private bool ShouldShowTotal(string columnName)
+    {
+        var config = state.ColumnConfigs.FirstOrDefault(c => c.ColumnName == columnName);
+        return config != null && config.IsNumeric && config.ShowTotal;
     }
 
     private bool IsBooleanColumn(DataColumn column)
@@ -1715,7 +1734,10 @@
         {
             ColumnName = c.ColumnName,
             IsVisible = c.IsVisible,
-            DisplayOrder = c.DisplayOrder
+            DisplayOrder = c.DisplayOrder,
+            IsNumeric = c.IsNumeric,
+            CustomTitle = c.CustomTitle,
+            ShowTotal = c.ShowTotal
         }).ToList();
 
         state.ShowColumnDialog = true;
@@ -1738,11 +1760,14 @@
 
         foreach (DataColumn column in state.GridData.Columns)
         {
+            bool isNumeric = IsNumericColumn(column);
             state.ColumnConfigs.Add(new ColumnConfig
             {
                 ColumnName = column.ColumnName,
                 IsVisible = !ShouldHideColumn(column.ColumnName),
-                DisplayOrder = order++
+                DisplayOrder = order++,
+                IsNumeric = isNumeric,
+                ShowTotal = isNumeric  // Por defecto, las columnas numéricas muestran totales
             });
         }
     }
@@ -1774,7 +1799,12 @@
     {
         state.ColumnConfigs = updatedConfigs;
         AcceptColumnConfig();
-        await Task.CompletedTask;
+
+        // Guardar la configuración
+        await SaveGridConfigurationAsync();
+
+        // Forzar recarga de la UI para mostrar los cambios en los títulos
+        StateHasChanged();
     }
 
     // Método actualizado para verificar si una columna debe ocultarse
@@ -2001,6 +2031,24 @@
             if (config == null)
                 return;
 
+            // Migración: asegurar que columnas numéricas tengan ShowTotal = true por defecto
+            // (para configuraciones antiguas que no tenían esta propiedad o la tenían en false)
+            if (config.Columnas != null && state.GridData != null)
+            {
+                foreach (var colConfig in config.Columnas)
+                {
+                    var dataColumn = state.GridData.Columns.Cast<DataColumn>()
+                        .FirstOrDefault(dc => dc.ColumnName == colConfig.Header);
+
+                    if (dataColumn != null && IsNumericColumn(dataColumn) && !colConfig.ShowTotal)
+                    {
+                        // Si es una columna numérica y ShowTotal es false, es probable que sea
+                        // una configuración antigua. Establecer en true por defecto.
+                        colConfig.ShowTotal = true;
+                    }
+                }
+            }
+
             // Guardar para aplicar la configuración de columnas después
             _pendingConfiguration = config;
 
@@ -2073,6 +2121,8 @@
                 {
                     existingCol.IsVisible = colConfig.Visible;
                     existingCol.DisplayOrder = colConfig.Orden;
+                    existingCol.CustomTitle = colConfig.CustomTitle;
+                    existingCol.ShowTotal = colConfig.ShowTotal;
                 }
             }
 
@@ -2103,7 +2153,9 @@
                 {
                     Header = c.ColumnName,
                     Orden = c.DisplayOrder,
-                    Visible = c.IsVisible
+                    Visible = c.IsVisible,
+                    CustomTitle = c.CustomTitle,
+                    ShowTotal = c.ShowTotal
                 }).ToList(),
 
                 FiltrosTexto = new Dictionary<string, string>(state.ColumnFilters),
@@ -2131,11 +2183,14 @@
 
             // Guardar en la base de datos
             await ConfigurationService.SaveGridConfigurationAsync(entidad.NombreVista, configJson);
+
+            await LogToConsole($"💾 Configuración guardada para {entidad.NombreVista}");
         }
         catch (Exception ex)
         {
             // Log silencioso - si falla el guardado, no interrumpir el cierre
             Console.WriteLine($"Error al guardar configuración: {ex.Message}");
+            await LogToConsole($"❌ Error al guardar configuración: {ex.Message}");
         }
     }
 

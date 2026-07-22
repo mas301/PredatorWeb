@@ -42,6 +42,12 @@ namespace PredatorWeb.Models
 
         [JsonPropertyName("Visible")]
         public bool Visible { get; set; } = true;
+
+        [JsonPropertyName("CustomTitle")]
+        public string? CustomTitle { get; set; }
+
+        [JsonPropertyName("ShowTotal")]
+        public bool ShowTotal { get; set; } = true;
     }
 
     /// <summary>
