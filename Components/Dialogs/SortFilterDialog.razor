@@ -5,23 +5,9 @@
 <div class="modal-overlay" @onclick="OnCancel">
     <div class="modal-dialog" @onclick:stopPropagation="true">
         <div class="modal-header">
-            <h3>Ordenar y Filtrar: @FormatColumnName(ColumnName ?? "")</h3>
+            <h3>Filtrar: @FormatColumnName(ColumnName ?? "")</h3>
         </div>
         <div class="modal-body">
-            <div class="sort-section">
-                <h4>Ordenamiento</h4>
-                <div class="sort-options">
-                    <label>
-                        <input type="radio" name="sortOrder" value="asc" checked="@localSortAscending" @onchange="@(() => localSortAscending = true)" />
-                        Ascendente (A-Z, 0-9)
-                    </label>
-                    <label>
-                        <input type="radio" name="sortOrder" value="desc" checked="@(!localSortAscending)" @onchange="@(() => localSortAscending = false)" />
-                        Descendente (Z-A, 9-0)
-                    </label>
-                </div>
-            </div>
-
             @if (ColumnType == ColumnFilterType.String)
             {
                 <div class="filter-section">
@@ -53,14 +39,18 @@
                     }
                     else
                     {
-                        <input type="text" 
-                               class="filter-input" 
-                               placeholder="Ingrese texto para filtrar..." 
-                               @bind="localFilterValue" />
-                        @if (!string.IsNullOrEmpty(localFilterValue))
-                        {
-                            <button class="btn-clear-filter" @onclick="ClearFilterValue">✖ Limpiar</button>
-                        }
+                        <div class="string-filter-section">
+                            <select class="string-filter-select" @bind="localStringFilterType">
+                                <option value="@StringFilterType.Contains">Contenga</option>
+                                <option value="@StringFilterType.StartsWith">Empiece con</option>
+                                <option value="@StringFilterType.EndsWith">Finalice con</option>
+                                <option value="@StringFilterType.Equals">Que sea igual a</option>
+                            </select>
+                            <input type="text" 
+                                   class="filter-input" 
+                                   placeholder="Ingrese texto para filtrar..." 
+                                   @bind="localFilterValue" />
+                        </div>
                     }
                 </div>
             }
@@ -70,27 +60,27 @@
                 <div class="filter-section">
                     <h4>Filtro de fecha</h4>
                     <select class="date-filter-select" @bind="localDateFilterType" @bind:after="OnDateFilterTypeChanged">
-                        <option value="@DateFilterType.None">Sin filtro</option>
                         <option value="@DateFilterType.Today">Hoy</option>
+                        <option value="@DateFilterType.Yesterday">Ayer</option>
                         <option value="@DateFilterType.ThisWeek">Esta Semana</option>
+                        <option value="@DateFilterType.LastWeek">Semana Anterior</option>
                         <option value="@DateFilterType.ThisMonth">Este Mes</option>
+                        <option value="@DateFilterType.LastMonth">Mes Anterior</option>
                         <option value="@DateFilterType.ThisYear">Este Año</option>
+                        <option value="@DateFilterType.LastYear">Año Anterior</option>
                         <option value="@DateFilterType.CustomRange">Rango de fechas</option>
                     </select>
 
-                    @if (localDateFilterType == Models.DateFilterType.CustomRange)
-                    {
-                        <div class="date-range-inputs">
-                            <div class="date-input-group">
-                                <label>Desde:</label>
-                                <input type="date" class="date-input" @bind="localDateFrom" />
-                            </div>
-                            <div class="date-input-group">
-                                <label>Hasta:</label>
-                                <input type="date" class="date-input" @bind="localDateTo" />
-                            </div>
+                    <div class="date-range-inputs">
+                        <div class="date-input-group">
+                            <label>Desde:</label>
+                            <input type="date" class="date-input" @bind="localDateFrom" />
                         </div>
-                    }
+                        <div class="date-input-group">
+                            <label>Hasta:</label>
+                            <input type="date" class="date-input" @bind="localDateTo" />
+                        </div>
+                    </div>
                 </div>
             }
 
@@ -98,16 +88,69 @@
             {
                 <div class="filter-section">
                     <h4>Filtro de checkbox</h4>
-                    <select class="boolean-filter-select" @bind="localBooleanFilterType">
-                        <option value="@BooleanFilterType.All">Todas</option>
-                        <option value="@BooleanFilterType.Checked">Solo con check (✓)</option>
-                        <option value="@BooleanFilterType.Unchecked">Solo sin check</option>
+                    <div class="filter-checkboxes">
+                        <div class="checkbox-actions">
+                            <button type="button" class="btn-link" @onclick="SelectAllBooleanValues">Seleccionar todos</button>
+                            <button type="button" class="btn-link" @onclick="ClearAllBooleanValues">Limpiar todos</button>
+                        </div>
+                        <div class="checkbox-list">
+                            <label class="checkbox-item">
+                                <input type="checkbox" 
+                                       checked="@localBooleanYes"
+                                       @onchange="@(e => localBooleanYes = (bool)e.Value!)" />
+                                <span>Sí</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" 
+                                       checked="@localBooleanNo"
+                                       @onchange="@(e => localBooleanNo = (bool)e.Value!)" />
+                                <span>No</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (ColumnType == ColumnFilterType.Numeric)
+            {
+                <div class="filter-section">
+                    <h4>Filtro numérico</h4>
+                    <select class="numeric-filter-select" @bind="localNumericFilterType">
+                        <option value="@NumericFilterType.Equal">Igual a (=)</option>
+                        <option value="@NumericFilterType.NotEqual">Diferente de (≠)</option>
+                        <option value="@NumericFilterType.GreaterThan">Mayor que (&gt;)</option>
+                        <option value="@NumericFilterType.GreaterThanOrEqual">Mayor o igual (≥)</option>
+                        <option value="@NumericFilterType.LessThan">Menor que (&lt;)</option>
+                        <option value="@NumericFilterType.LessThanOrEqual">Menor o igual (≤)</option>
+                        <option value="@NumericFilterType.Between">Entre (rango)</option>
                     </select>
+
+                    <div class="numeric-inputs">
+                        <div class="numeric-input-group">
+                            <label>@GetNumericLabel1():</label>
+                            <input type="number" 
+                                   step="any" 
+                                   class="numeric-input" 
+                                   @bind="localNumericValue1" 
+                                   placeholder="Ingrese valor..." />
+                        </div>
+
+                        <div class="numeric-input-group" style="@(localNumericFilterType == NumericFilterType.Between ? "" : "display: none;")">
+                            <label>Hasta:</label>
+                            <input type="number" 
+                                   step="any" 
+                                   class="numeric-input" 
+                                   @bind="localNumericValue2" 
+                                   placeholder="Ingrese valor..." 
+                                   disabled="@(localNumericFilterType != NumericFilterType.Between)" />
+                        </div>
+                    </div>
                 </div>
             }
         </div>
         <div class="modal-footer">
             <button class="btn-modal btn-cancel" @onclick="OnCancel">Cancelar</button>
+            <button class="btn-modal btn-clear" @onclick="HandleClear">Limpiar</button>
             <button class="btn-modal btn-accept" @onclick="HandleAccept">Aceptar</button>
         </div>
     </div>
@@ -118,6 +161,7 @@
     [Parameter] public ColumnFilterType ColumnType { get; set; }
     [Parameter] public bool SortAscending { get; set; } = true;
     [Parameter] public string FilterValue { get; set; } = "";
+    [Parameter] public StringFilterType StringFilterType { get; set; } = StringFilterType.Contains;
     [Parameter] public List<string>? AvailableValues { get; set; }
     [Parameter] public HashSet<string> SelectedValues { get; set; } = new();
     [Parameter] public bool IsLoadingValues { get; set; }
@@ -125,27 +169,44 @@
     [Parameter] public DateTime? DateFrom { get; set; }
     [Parameter] public DateTime? DateTo { get; set; }
     [Parameter] public BooleanFilterType BooleanFilterType { get; set; } = BooleanFilterType.All;
+    [Parameter] public NumericFilterType NumericFilterType { get; set; } = NumericFilterType.None;
+    [Parameter] public decimal? NumericValue1 { get; set; }
+    [Parameter] public decimal? NumericValue2 { get; set; }
 
     [Parameter] public EventCallback OnCancel { get; set; }
     [Parameter] public EventCallback<SortFilterResult> OnAccept { get; set; }
 
-    private bool localSortAscending;
     private string localFilterValue = "";
+    private StringFilterType localStringFilterType = StringFilterType.Contains;
     private HashSet<string> localSelectedValues = new();
-    private DateFilterType localDateFilterType = DateFilterType.None;
+    private DateFilterType localDateFilterType = DateFilterType.Today;
     private DateTime? localDateFrom;
     private DateTime? localDateTo;
     private BooleanFilterType localBooleanFilterType = BooleanFilterType.All;
+    private bool localBooleanYes = false;
+    private bool localBooleanNo = false;
+    private NumericFilterType localNumericFilterType = NumericFilterType.Equal;
+    private decimal? localNumericValue1;
+    private decimal? localNumericValue2;
 
     protected override void OnParametersSet()
     {
-        localSortAscending = SortAscending;
         localFilterValue = FilterValue;
+        localStringFilterType = StringFilterType;
         localSelectedValues = new HashSet<string>(SelectedValues);
         localDateFilterType = DateFilterType;
         localDateFrom = DateFrom;
         localDateTo = DateTo;
         localBooleanFilterType = BooleanFilterType;
+
+        // Convertir BooleanFilterType a checkboxes
+        localBooleanYes = BooleanFilterType == BooleanFilterType.All || BooleanFilterType == BooleanFilterType.Checked;
+        localBooleanNo = BooleanFilterType == BooleanFilterType.All || BooleanFilterType == BooleanFilterType.Unchecked;
+
+        // Inicializar el filtro numérico
+        localNumericFilterType = NumericFilterType;
+        localNumericValue1 = NumericValue1;
+        localNumericValue2 = NumericValue2;
     }
 
     protected override void OnInitialized()
@@ -181,34 +242,167 @@
         localSelectedValues.Clear();
     }
 
-    private void ClearFilterValue()
+    private void SelectAllBooleanValues()
     {
-        localFilterValue = "";
+        localBooleanYes = true;
+        localBooleanNo = true;
+    }
+
+    private void ClearAllBooleanValues()
+    {
+        localBooleanYes = false;
+        localBooleanNo = false;
+    }
+
+    private string GetNumericLabel1()
+    {
+        return localNumericFilterType switch
+        {
+            NumericFilterType.Between => "Desde",
+            _ => "Valor"
+        };
     }
 
     private async Task OnDateFilterTypeChanged()
     {
-        if (localDateFilterType == Models.DateFilterType.CustomRange)
+        var today = DateTime.Today;
+
+        switch (localDateFilterType)
         {
-            if (!localDateFrom.HasValue)
-                localDateFrom = DateTime.Today;
-            if (!localDateTo.HasValue)
-                localDateTo = DateTime.Today;
+            case Models.DateFilterType.None:
+                // Sin filtro - no cambiar las fechas
+                break;
+
+            case Models.DateFilterType.Today:
+                // Hoy - desde y hasta hoy
+                localDateFrom = today;
+                localDateTo = today;
+                break;
+
+            case Models.DateFilterType.Yesterday:
+                // Ayer - desde y hasta ayer
+                var yesterday = today.AddDays(-1);
+                localDateFrom = yesterday;
+                localDateTo = yesterday;
+                break;
+
+            case Models.DateFilterType.ThisWeek:
+                // Esta semana - desde el lunes hasta el domingo
+                var dayOfWeek = (int)today.DayOfWeek;
+                var daysFromMonday = dayOfWeek == 0 ? 6 : dayOfWeek - 1; // Domingo = 0, ajustar para que lunes sea el primer día
+                localDateFrom = today.AddDays(-daysFromMonday);
+                localDateTo = localDateFrom.Value.AddDays(6);
+                break;
+
+            case Models.DateFilterType.LastWeek:
+                // Semana anterior - desde el lunes hasta el domingo de la semana pasada
+                var lastWeekDayOfWeek = (int)today.DayOfWeek;
+                var lastWeekDaysFromMonday = lastWeekDayOfWeek == 0 ? 6 : lastWeekDayOfWeek - 1;
+                var lastWeekMonday = today.AddDays(-lastWeekDaysFromMonday - 7);
+                localDateFrom = lastWeekMonday;
+                localDateTo = lastWeekMonday.AddDays(6);
+                break;
+
+            case Models.DateFilterType.ThisMonth:
+                // Este mes - desde el día 1 hasta el último día del mes
+                localDateFrom = new DateTime(today.Year, today.Month, 1);
+                localDateTo = localDateFrom.Value.AddMonths(1).AddDays(-1);
+                break;
+
+            case Models.DateFilterType.LastMonth:
+                // Mes anterior - desde el día 1 hasta el último día del mes pasado
+                var lastMonth = today.AddMonths(-1);
+                localDateFrom = new DateTime(lastMonth.Year, lastMonth.Month, 1);
+                localDateTo = localDateFrom.Value.AddMonths(1).AddDays(-1);
+                break;
+
+            case Models.DateFilterType.ThisYear:
+                // Este año - desde el 1 de enero hasta el 31 de diciembre
+                localDateFrom = new DateTime(today.Year, 1, 1);
+                localDateTo = new DateTime(today.Year, 12, 31);
+                break;
+
+            case Models.DateFilterType.LastYear:
+                // Año anterior - desde el 1 de enero hasta el 31 de diciembre del año pasado
+                var lastYear = today.Year - 1;
+                localDateFrom = new DateTime(lastYear, 1, 1);
+                localDateTo = new DateTime(lastYear, 12, 31);
+                break;
+
+            case Models.DateFilterType.CustomRange:
+                // Rango personalizado - no cambiar las fechas, permitir entrada manual
+                // Si están vacías, inicializar con hoy
+                if (!localDateFrom.HasValue)
+                    localDateFrom = today;
+                if (!localDateTo.HasValue)
+                    localDateTo = today;
+                break;
         }
+
         await Task.CompletedTask;
+    }
+
+    private async Task HandleClear()
+    {
+        // Limpiar todos los valores de filtros
+        localFilterValue = "";
+        localStringFilterType = StringFilterType.Contains;
+        localSelectedValues.Clear();
+        localDateFilterType = DateFilterType.None;
+        localDateFrom = null;
+        localDateTo = null;
+        localBooleanFilterType = BooleanFilterType.All;
+        localBooleanYes = false;
+        localBooleanNo = false;
+        localNumericFilterType = NumericFilterType.None;
+        localNumericValue1 = null;
+        localNumericValue2 = null;
+
+        // Aplicar los cambios (enviar valores vacíos) y cerrar el diálogo
+        var result = new SortFilterResult
+        {
+            SortAscending = SortAscending, // Mantener el ordenamiento actual sin cambios
+            FilterValue = "",
+            StringFilterType = StringFilterType.Contains,
+            SelectedValues = new List<string>(),
+            DateFilterType = DateFilterType.None,
+            DateFrom = null,
+            DateTo = null,
+            BooleanFilterType = BooleanFilterType.All,
+            NumericFilterType = NumericFilterType.None,
+            NumericValue1 = null,
+            NumericValue2 = null
+        };
+
+        await OnAccept.InvokeAsync(result);
     }
 
     private async Task HandleAccept()
     {
+        // Convertir checkboxes booleanos a BooleanFilterType
+        BooleanFilterType booleanResult;
+        if (localBooleanYes && localBooleanNo)
+            booleanResult = BooleanFilterType.All;
+        else if (localBooleanYes && !localBooleanNo)
+            booleanResult = BooleanFilterType.Checked;
+        else if (!localBooleanYes && localBooleanNo)
+            booleanResult = BooleanFilterType.Unchecked;
+        else
+            booleanResult = BooleanFilterType.All; // Si ambos están desmarcados, mostrar todos
+
         var result = new SortFilterResult
         {
-            SortAscending = localSortAscending,
+            SortAscending = SortAscending, // Mantener el ordenamiento actual sin cambios
             FilterValue = localFilterValue,
+            StringFilterType = localStringFilterType,
             SelectedValues = localSelectedValues.ToList(),
             DateFilterType = localDateFilterType,
             DateFrom = localDateFrom,
             DateTo = localDateTo,
-            BooleanFilterType = localBooleanFilterType
+            BooleanFilterType = booleanResult,
+            NumericFilterType = localNumericFilterType,
+            NumericValue1 = localNumericValue1,
+            NumericValue2 = localNumericValue2
         };
 
         await OnAccept.InvokeAsync(result);

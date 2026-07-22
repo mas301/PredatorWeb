@@ -160,12 +160,33 @@
                         {
                             @if (!ShouldHideColumn(column.ColumnName))
                             {
-                                <th @onclick="@(() => ShowSortDialog(column.ColumnName))" class="@(IsNumericColumn(column) ? "text-right" : "")">
-                                    @FormatColumnName(column.ColumnName)
-                                    @if (state.SortColumn == column.ColumnName)
-                                    {
-                                        <span>@(state.SortAscending ? "▲" : "▼")</span>
-                                    }
+                                <th class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                    <div class="th-container">
+                                        <span class="th-title">@FormatColumnName(column.ColumnName)</span>
+                                        <div class="th-icons">
+                                            <span class="th-icon filter-icon @(HasActiveFilter(column.ColumnName) ? "active" : "")" 
+                                                  @onclick="@(() => ShowFilterDialog(column.ColumnName))"
+                                                  @onclick:stopPropagation="true"
+                                                  title="Filtrar">
+                                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/>
+                                                </svg>
+                                            </span>
+                                            <span class="th-icon sort-icon @(state.SortColumn == column.ColumnName ? "active" : "")" 
+                                                  @onclick="@(() => ToggleSort(column.ColumnName))"
+                                                  @onclick:stopPropagation="true"
+                                                  title="Ordenar">
+                                                @if (state.SortColumn == column.ColumnName)
+                                                {
+                                                    @(state.SortAscending ? "▲" : "▼")
+                                                }
+                                                else
+                                                {
+                                                    <text>⇅</text>
+                                                }
+                                            </span>
+                                        </div>
+                                    </div>
                                 </th>
                             }
                         }
@@ -286,6 +307,7 @@
             ColumnType="@GetColumnFilterType()"
             SortAscending="@state.TempSortAscending"
             FilterValue="@state.TempFilterValue"
+            StringFilterType="@state.TempStringFilterType"
             AvailableValues="@state.AvailableFilterValues"
             SelectedValues="@state.SelectedFilterValues"
             IsLoadingValues="@state.IsLoadingFilterValues"
@@ -293,6 +315,9 @@
             DateFrom="@state.TempDateFrom"
             DateTo="@state.TempDateTo"
             BooleanFilterType="@state.TempBooleanFilterType"
+            NumericFilterType="@state.TempNumericFilterType"
+            NumericValue1="@state.TempNumericValue1"
+            NumericValue2="@state.TempNumericValue2"
             OnCancel="@CancelSort"
             OnAccept="@HandleSortFilterAccept" />
     }
@@ -370,7 +395,9 @@
             bool hasActiveFilters = state.ColumnFilters.Any() || 
                                    state.MultiValueFilters.Any() || 
                                    state.DateFilters.Any() || 
-                                   state.BooleanFilters.Any();
+                                   state.BooleanFilters.Any() ||
+                                   state.StringFilters.Any() ||
+                                   state.NumericFilters.Any(f => f.Value.Type != NumericFilterType.None);
 
             // TERCERO: Cargar datos con o sin filtros
             if (hasActiveFilters)
@@ -628,14 +655,23 @@
             state.TempSortAscending = true;
         }
 
-        // Cargar el filtro de texto existente para esta columna si existe
-        if (state.ColumnFilters.ContainsKey(columnName))
+        // Cargar el filtro de string con tipo existente para esta columna si existe
+        if (state.StringFilters.ContainsKey(columnName))
+        {
+            var stringFilter = state.StringFilters[columnName];
+            state.TempFilterValue = stringFilter.Value;
+            state.TempStringFilterType = stringFilter.Type;
+        }
+        // Cargar el filtro de texto existente para esta columna si existe (compatibilidad con filtros antiguos)
+        else if (state.ColumnFilters.ContainsKey(columnName))
         {
             state.TempFilterValue = state.ColumnFilters[columnName];
+            state.TempStringFilterType = StringFilterType.Contains;
         }
         else
         {
             state.TempFilterValue = "";
+            state.TempStringFilterType = StringFilterType.Contains;
         }
 
         // Cargar selecciones múltiples existentes
@@ -671,6 +707,21 @@
         else
         {
             state.TempBooleanFilterType = BooleanFilterType.All;
+        }
+
+        // Cargar el filtro numérico existente para esta columna si existe
+        if (state.NumericFilters.ContainsKey(columnName))
+        {
+            var numericFilter = state.NumericFilters[columnName];
+            state.TempNumericFilterType = numericFilter.Type;
+            state.TempNumericValue1 = numericFilter.Value1;
+            state.TempNumericValue2 = numericFilter.Value2;
+        }
+        else
+        {
+            state.TempNumericFilterType = NumericFilterType.None;
+            state.TempNumericValue1 = null;
+            state.TempNumericValue2 = null;
         }
 
         // Cargar valores únicos si es una columna de texto
@@ -709,25 +760,27 @@
     {
         if (!string.IsNullOrEmpty(state.SelectedColumnForSort))
         {
-            state.SortColumn = state.SelectedColumnForSort;
-            state.SortAscending = state.TempSortAscending;
+            // NOTA: Ya NO establecemos el ordenamiento automáticamente aquí
+            // El ordenamiento solo se cambia desde el icono de ordenamiento (ToggleSort)
+            // Este método ahora solo maneja filtros
 
             // Guardar o eliminar el filtro según el valor
             if (IsSelectedColumnString())
             {
-                // Limpiar ambos tipos de filtros de esta columna primero
+                // Limpiar todos los tipos de filtros de esta columna primero
                 state.ColumnFilters.Remove(state.SelectedColumnForSort);
                 state.MultiValueFilters.Remove(state.SelectedColumnForSort);
+                state.StringFilters.Remove(state.SelectedColumnForSort);
 
                 // Si hay filtros por checkbox seleccionados
                 if (state.SelectedFilterValues.Any())
                 {
                     state.MultiValueFilters[state.SelectedColumnForSort] = state.SelectedFilterValues.ToList();
                 }
-                // Si hay texto en el filtro manual
+                // Si hay texto en el filtro manual con tipo de coincidencia
                 else if (!string.IsNullOrWhiteSpace(state.TempFilterValue))
                 {
-                    state.ColumnFilters[state.SelectedColumnForSort] = state.TempFilterValue;
+                    state.StringFilters[state.SelectedColumnForSort] = (state.TempStringFilterType, state.TempFilterValue);
                 }
             }
 
@@ -756,6 +809,19 @@
                     state.BooleanFilters.Remove(state.SelectedColumnForSort);
                 }
             }
+
+            // Guardar o eliminar el filtro numérico
+            if (GetColumnFilterType() == ColumnFilterType.Numeric)
+            {
+                if (state.TempNumericFilterType != NumericFilterType.None)
+                {
+                    state.NumericFilters[state.SelectedColumnForSort] = (state.TempNumericFilterType, state.TempNumericValue1, state.TempNumericValue2);
+                }
+                else
+                {
+                    state.NumericFilters.Remove(state.SelectedColumnForSort);
+                }
+            }
         }
         state.ShowSortDialog = false;
 
@@ -763,23 +829,82 @@
         await ReloadDataWithFiltersAsync();
     }
 
+    private async Task ShowFilterDialog(string columnName)
+    {
+        // Reutilizar la lógica de ShowSortDialog pero sin cambiar el orden
+        await ShowSortDialog(columnName);
+    }
+
+    private async Task ToggleSort(string columnName)
+    {
+        // Si es la misma columna, invertir el orden
+        if (state.SortColumn == columnName)
+        {
+            state.SortAscending = !state.SortAscending;
+        }
+        else
+        {
+            // Nueva columna, ordenar ascendente por defecto
+            state.SortColumn = columnName;
+            state.SortAscending = true;
+        }
+
+        // Ordenar en memoria usando DataView
+        SortDataInMemory();
+
+        // Forzar actualización de la UI
+        StateHasChanged();
+
+        await Task.CompletedTask;
+    }
+
+    private void SortDataInMemory()
+    {
+        if (state.GridData == null || string.IsNullOrEmpty(state.SortColumn))
+            return;
+
+        try
+        {
+            // Crear una vista del DataTable para ordenar
+            var dataView = state.GridData.DefaultView;
+            var direction = state.SortAscending ? "ASC" : "DESC";
+
+            // Aplicar el ordenamiento
+            dataView.Sort = $"{state.SortColumn} {direction}";
+
+            // Crear un nuevo DataTable con los datos ordenados
+            var sortedTable = dataView.ToTable();
+
+            // Reemplazar el DataTable actual con el ordenado
+            state.GridData = sortedTable;
+        }
+        catch (Exception ex)
+        {
+            // Si hay error al ordenar (ej: columna inválida), ignorar silenciosamente
+            Console.WriteLine($"Error al ordenar en memoria: {ex.Message}");
+        }
+    }
+
     private async Task HandleSortFilterAccept(SortFilterResult result)
     {
         if (!string.IsNullOrEmpty(state.SelectedColumnForSort))
         {
-            state.SortColumn = state.SelectedColumnForSort;
-            state.SortAscending = result.SortAscending;
+            // NOTA: Ya NO establecemos el ordenamiento desde el diálogo de filtro
+            // El ordenamiento solo se cambia desde el icono de ordenamiento directo
 
             // Actualizar los valores temporales desde el resultado
-            state.TempSortAscending = result.SortAscending;
             state.TempFilterValue = result.FilterValue;
+            state.TempStringFilterType = result.StringFilterType;
             state.SelectedFilterValues = new HashSet<string>(result.SelectedValues);
             state.TempDateFilterType = result.DateFilterType;
             state.TempDateFrom = result.DateFrom;
             state.TempDateTo = result.DateTo;
             state.TempBooleanFilterType = result.BooleanFilterType;
+            state.TempNumericFilterType = result.NumericFilterType;
+            state.TempNumericValue1 = result.NumericValue1;
+            state.TempNumericValue2 = result.NumericValue2;
 
-            // Procesar los filtros igual que antes
+            // Procesar solo los filtros (sin cambiar el ordenamiento)
             await AcceptSort();
         }
     }
@@ -828,11 +953,23 @@
             {
                 ColumnFilters = new Dictionary<string, string>(state.ColumnFilters),
                 MultiValueFilters = new Dictionary<string, List<string>>(state.MultiValueFilters),
+                StringFilters = new Dictionary<string, StringFilter>(),
                 DateFilters = new Dictionary<string, DateFilter>(),
                 BooleanFilters = new Dictionary<string, BooleanFilterType>(state.BooleanFilters),
+                NumericFilters = new Dictionary<string, NumericFilter>(),
                 SortColumn = state.SortColumn,
                 SortAscending = state.SortAscending
             };
+
+            // Convertir StringFilters al formato esperado
+            foreach (var sf in state.StringFilters)
+            {
+                serverFilter.StringFilters[sf.Key] = new StringFilter
+                {
+                    Type = sf.Value.Type,
+                    Value = sf.Value.Value
+                };
+            }
 
             // Convertir DateFilters al formato esperado
             foreach (var df in state.DateFilters)
@@ -842,6 +979,17 @@
                     Type = df.Value.Type,
                     StartDate = df.Value.From,
                     EndDate = df.Value.To
+                };
+            }
+
+            // Convertir NumericFilters al formato esperado
+            foreach (var nf in state.NumericFilters)
+            {
+                serverFilter.NumericFilters[nf.Key] = new NumericFilter
+                {
+                    Type = nf.Value.Type,
+                    Value1 = nf.Value.Value1,
+                    Value2 = nf.Value.Value2
                 };
             }
 
@@ -1044,6 +1192,35 @@
     private bool IsBooleanColumn(DataColumn column)
     {
         return column.DataType == typeof(bool);
+    }
+
+    private bool HasActiveFilter(string columnName)
+    {
+        // Verificar si hay filtro de texto
+        if (state.ColumnFilters.ContainsKey(columnName) && !string.IsNullOrWhiteSpace(state.ColumnFilters[columnName]))
+            return true;
+
+        // Verificar si hay filtro multi-valor
+        if (state.MultiValueFilters.ContainsKey(columnName) && state.MultiValueFilters[columnName].Any())
+            return true;
+
+        // Verificar si hay filtro de string con tipo
+        if (state.StringFilters.ContainsKey(columnName) && !string.IsNullOrWhiteSpace(state.StringFilters[columnName].Value))
+            return true;
+
+        // Verificar si hay filtro de fecha
+        if (state.DateFilters.ContainsKey(columnName) && state.DateFilters[columnName].Type != DateFilterType.None)
+            return true;
+
+        // Verificar si hay filtro booleano
+        if (state.BooleanFilters.ContainsKey(columnName) && state.BooleanFilters[columnName] != BooleanFilterType.All)
+            return true;
+
+        // Verificar si hay filtro numérico
+        if (state.NumericFilters.ContainsKey(columnName) && state.NumericFilters[columnName].Type != NumericFilterType.None)
+            return true;
+
+        return false;
     }
 
     private bool GetBooleanValue(object value)
@@ -1647,7 +1824,9 @@
         return state.ColumnFilters.Any() 
             || state.MultiValueFilters.Any() 
             || state.DateFilters.Any() 
-            || state.BooleanFilters.Any(f => f.Value != BooleanFilterType.All);
+            || state.BooleanFilters.Any(f => f.Value != BooleanFilterType.All)
+            || state.StringFilters.Any()
+            || state.NumericFilters.Any(f => f.Value.Type != NumericFilterType.None);
     }
 
     private async Task ClearAllFilters()
@@ -1656,9 +1835,11 @@
         state.MultiValueFilters.Clear();
         state.DateFilters.Clear();
         state.BooleanFilters.Clear();
-        state.SortColumn = null;
+        state.StringFilters.Clear();
+        state.NumericFilters.Clear();
+        // NOTA: NO limpiar state.SortColumn - mantener el ordenamiento actual
 
-        // Recargar datos sin filtros
+        // Recargar datos sin filtros (pero con el ordenamiento actual)
         await ReloadDataWithFiltersAsync();
     }
 
@@ -1697,14 +1878,26 @@
                 case DateFilterType.Today:
                     parts.Add($"{columnName} = Hoy");
                     break;
+                case DateFilterType.Yesterday:
+                    parts.Add($"{columnName} = Ayer");
+                    break;
                 case DateFilterType.ThisWeek:
                     parts.Add($"{columnName} = Esta Semana");
+                    break;
+                case DateFilterType.LastWeek:
+                    parts.Add($"{columnName} = Semana Anterior");
                     break;
                 case DateFilterType.ThisMonth:
                     parts.Add($"{columnName} = Este Mes");
                     break;
+                case DateFilterType.LastMonth:
+                    parts.Add($"{columnName} = Mes Anterior");
+                    break;
                 case DateFilterType.ThisYear:
                     parts.Add($"{columnName} = Este Año");
+                    break;
+                case DateFilterType.LastYear:
+                    parts.Add($"{columnName} = Año Anterior");
                     break;
                 case DateFilterType.CustomRange:
                     if (filterInfo.From.HasValue && filterInfo.To.HasValue)
@@ -1732,6 +1925,54 @@
             parts.Add(filterType == BooleanFilterType.Checked
                 ? $"{columnName} = Sí"
                 : $"{columnName} = No");
+        }
+
+        // Filtros de string con tipo
+        foreach (var stringFilter in state.StringFilters)
+        {
+            var columnName = stringFilter.Key;
+            var filterInfo = stringFilter.Value;
+            var filterTypeText = filterInfo.Type switch
+            {
+                StringFilterType.Contains => "contenga",
+                StringFilterType.StartsWith => "empiece con",
+                StringFilterType.EndsWith => "finalice con",
+                StringFilterType.Equals => "sea igual a",
+                _ => "contenga"
+            };
+            parts.Add($"{columnName} {filterTypeText} '{filterInfo.Value}'");
+        }
+
+        // Filtros numéricos
+        foreach (var numericFilter in state.NumericFilters.Where(f => f.Value.Type != NumericFilterType.None))
+        {
+            var columnName = numericFilter.Key;
+            var filterInfo = numericFilter.Value;
+
+            switch (filterInfo.Type)
+            {
+                case NumericFilterType.Equal:
+                    parts.Add($"{columnName} = {filterInfo.Value1}");
+                    break;
+                case NumericFilterType.NotEqual:
+                    parts.Add($"{columnName} ≠ {filterInfo.Value1}");
+                    break;
+                case NumericFilterType.GreaterThan:
+                    parts.Add($"{columnName} > {filterInfo.Value1}");
+                    break;
+                case NumericFilterType.GreaterThanOrEqual:
+                    parts.Add($"{columnName} ≥ {filterInfo.Value1}");
+                    break;
+                case NumericFilterType.LessThan:
+                    parts.Add($"{columnName} < {filterInfo.Value1}");
+                    break;
+                case NumericFilterType.LessThanOrEqual:
+                    parts.Add($"{columnName} ≤ {filterInfo.Value1}");
+                    break;
+                case NumericFilterType.Between:
+                    parts.Add($"{columnName} entre {filterInfo.Value1} y {filterInfo.Value2}");
+                    break;
+            }
         }
 
         return string.Join(" y ", parts);

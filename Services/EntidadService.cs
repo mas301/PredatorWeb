@@ -95,6 +95,35 @@ namespace PredatorWeb.Services
                     }
                 }
 
+                // Filtros de string con tipo de coincidencia
+                foreach (var filter in filters.StringFilters)
+                {
+                    if (!string.IsNullOrWhiteSpace(filter.Value.Value))
+                    {
+                        var columnName = SanitizeColumnName(filter.Key);
+                        var filterValue = filter.Value.Value.Replace("'", "''"); // Escapar comillas simples
+
+                        switch (filter.Value.Type)
+                        {
+                            case StringFilterType.Contains:
+                                whereClauses.Add($"{columnName} LIKE '%{filterValue}%'");
+                                break;
+
+                            case StringFilterType.StartsWith:
+                                whereClauses.Add($"{columnName} LIKE '{filterValue}%'");
+                                break;
+
+                            case StringFilterType.EndsWith:
+                                whereClauses.Add($"{columnName} LIKE '%{filterValue}'");
+                                break;
+
+                            case StringFilterType.Equals:
+                                whereClauses.Add($"{columnName} = '{filterValue}'");
+                                break;
+                        }
+                    }
+                }
+
                 // Filtros de fecha
                 foreach (var filter in filters.DateFilters)
                 {
@@ -107,17 +136,34 @@ namespace PredatorWeb.Services
                             whereClauses.Add($"CAST({columnName} AS DATE) = CAST(GETDATE() AS DATE)");
                             break;
 
+                        case DateFilterType.Yesterday:
+                            whereClauses.Add($"CAST({columnName} AS DATE) = CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)");
+                            break;
+
                         case DateFilterType.ThisWeek:
                             whereClauses.Add($"{columnName} >= DATEADD(DAY, 1-DATEPART(WEEKDAY, GETDATE()), CAST(GETDATE() AS DATE))");
                             whereClauses.Add($"{columnName} < DATEADD(DAY, 8-DATEPART(WEEKDAY, GETDATE()), CAST(GETDATE() AS DATE))");
+                            break;
+
+                        case DateFilterType.LastWeek:
+                            whereClauses.Add($"{columnName} >= DATEADD(DAY, 1-DATEPART(WEEKDAY, GETDATE())-7, CAST(GETDATE() AS DATE))");
+                            whereClauses.Add($"{columnName} < DATEADD(DAY, 8-DATEPART(WEEKDAY, GETDATE())-7, CAST(GETDATE() AS DATE))");
                             break;
 
                         case DateFilterType.ThisMonth:
                             whereClauses.Add($"YEAR({columnName}) = YEAR(GETDATE()) AND MONTH({columnName}) = MONTH(GETDATE())");
                             break;
 
+                        case DateFilterType.LastMonth:
+                            whereClauses.Add($"YEAR({columnName}) = YEAR(DATEADD(MONTH, -1, GETDATE())) AND MONTH({columnName}) = MONTH(DATEADD(MONTH, -1, GETDATE()))");
+                            break;
+
                         case DateFilterType.ThisYear:
                             whereClauses.Add($"YEAR({columnName}) = YEAR(GETDATE())");
+                            break;
+
+                        case DateFilterType.LastYear:
+                            whereClauses.Add($"YEAR({columnName}) = YEAR(GETDATE()) - 1");
                             break;
 
                         case DateFilterType.CustomRange:
@@ -141,6 +187,54 @@ namespace PredatorWeb.Services
                         var columnName = SanitizeColumnName(filter.Key);
                         var boolValue = filter.Value == BooleanFilterType.Checked ? "1" : "0";
                         whereClauses.Add($"{columnName} = {boolValue}");
+                    }
+                }
+
+                // Filtros numéricos
+                foreach (var filter in filters.NumericFilters)
+                {
+                    var numericFilter = filter.Value;
+                    if (numericFilter.Type != NumericFilterType.None)
+                    {
+                        var columnName = SanitizeColumnName(filter.Key);
+
+                        switch (numericFilter.Type)
+                        {
+                            case NumericFilterType.Equal:
+                                if (numericFilter.Value1.HasValue)
+                                    whereClauses.Add($"{columnName} = {numericFilter.Value1.Value}");
+                                break;
+
+                            case NumericFilterType.NotEqual:
+                                if (numericFilter.Value1.HasValue)
+                                    whereClauses.Add($"{columnName} <> {numericFilter.Value1.Value}");
+                                break;
+
+                            case NumericFilterType.GreaterThan:
+                                if (numericFilter.Value1.HasValue)
+                                    whereClauses.Add($"{columnName} > {numericFilter.Value1.Value}");
+                                break;
+
+                            case NumericFilterType.GreaterThanOrEqual:
+                                if (numericFilter.Value1.HasValue)
+                                    whereClauses.Add($"{columnName} >= {numericFilter.Value1.Value}");
+                                break;
+
+                            case NumericFilterType.LessThan:
+                                if (numericFilter.Value1.HasValue)
+                                    whereClauses.Add($"{columnName} < {numericFilter.Value1.Value}");
+                                break;
+
+                            case NumericFilterType.LessThanOrEqual:
+                                if (numericFilter.Value1.HasValue)
+                                    whereClauses.Add($"{columnName} <= {numericFilter.Value1.Value}");
+                                break;
+
+                            case NumericFilterType.Between:
+                                if (numericFilter.Value1.HasValue && numericFilter.Value2.HasValue)
+                                    whereClauses.Add($"{columnName} BETWEEN {numericFilter.Value1.Value} AND {numericFilter.Value2.Value}");
+                                break;
+                        }
                     }
                 }
             }
@@ -199,8 +293,20 @@ namespace PredatorWeb.Services
 
             var sanitizedColumn = SanitizeColumnName(columnName);
 
+            // Construir la cláusula WHERE con el filtro de empresa si aplica
+            var whereClause = $"{sanitizedColumn} IS NOT NULL";
+            if (entidad.FiltrarxEmpresa && _sessionService.EmpresaId.HasValue)
+            {
+                whereClause += $" AND EmpresaId = {_sessionService.EmpresaId.Value}";
+                Console.WriteLine($"🔵 GetDistinctValues - Filtro EmpresaId aplicado: {_sessionService.EmpresaId.Value}");
+            }
+            else
+            {
+                Console.WriteLine($"🔴 GetDistinctValues - Filtro EmpresaId NO aplicado - FiltrarxEmpresa: {entidad.FiltrarxEmpresa}, EmpresaId: {_sessionService.EmpresaId}");
+            }
+
             // Primero verificar cuántos valores distintos hay
-            var countQuery = $"SELECT COUNT(DISTINCT {sanitizedColumn}) AS DistinctCount FROM {entidad.NombreVista} WHERE {sanitizedColumn} IS NOT NULL";
+            var countQuery = $"SELECT COUNT(DISTINCT {sanitizedColumn}) AS DistinctCount FROM {entidad.NombreVista} WHERE {whereClause}";
             var countTable = await _datos.ExecuteQueryAsync(countQuery);
 
             if (countTable.Rows.Count == 0)
@@ -215,7 +321,7 @@ namespace PredatorWeb.Services
             }
 
             // Obtener los valores únicos
-            var query = $"SELECT DISTINCT {sanitizedColumn} FROM {entidad.NombreVista} WHERE {sanitizedColumn} IS NOT NULL ORDER BY {sanitizedColumn}";
+            var query = $"SELECT DISTINCT {sanitizedColumn} FROM {entidad.NombreVista} WHERE {whereClause} ORDER BY {sanitizedColumn}";
             var dataTable = await _datos.ExecuteQueryAsync(query);
 
             var values = new List<string>();

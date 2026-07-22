@@ -608,24 +608,82 @@ input[type="checkbox"] {
 }
 
 .data-grid th {
-    padding: 12px 15px;
+    padding: 12px 0 12px 15px;
     text-align: left;
     font-weight: 600;
     color: #333;
     border-bottom: 2px solid #ddd;
-    cursor: pointer;
     user-select: none;
     white-space: nowrap;
+    cursor: default;
+}
+
+/* Contenedor del encabezado con tres zonas */
+.data-grid th .th-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.data-grid th .th-title {
+    flex: 1;
+    cursor: default;
+}
+
+.data-grid th .th-icons {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.data-grid th .th-icon {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    opacity: 0.6;
+}
+
+.data-grid th .th-icon:hover {
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.data-grid th .th-icon.filter-icon {
+    color: #6c757d;
+}
+
+.data-grid th .th-icon.filter-icon svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+}
+
+.data-grid th .th-icon.filter-icon.active {
+    opacity: 1;
+    color: #007bff;
+}
+
+.data-grid th .th-icon.sort-icon {
+    font-size: 12px;
+}
+
+.data-grid th .th-icon.sort-icon.active {
+    opacity: 1;
+    color: #007bff;
+    font-weight: bold;
 }
 
 .data-grid th:hover {
     background-color: #e9e9e9;
 }
 
-.data-grid th span {
-    margin-left: 5px;
-    font-size: 10px;
-}
 
 .data-grid td {
     padding: 10px 15px;
@@ -780,20 +838,8 @@ input[type="checkbox"] {
     padding: 20px 15px;
 }
 
-.sort-section {
-    margin-bottom: 15px;
-}
-
-.sort-section h4 {
-    margin: 0 0 10px 0;
-    font-size: 13px;
-    font-weight: 600;
-    color: #555;
-}
-
 .filter-section {
-    padding-top: 15px;
-    border-top: 1px solid #eee;
+    padding-top: 0;
 }
 
 .filter-section h4 {
@@ -905,35 +951,10 @@ input[type="checkbox"] {
     user-select: none;
 }
 
-.sort-options {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.sort-options label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    padding: 6px 8px;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-
-.sort-options label:hover {
-    background-color: #f5f5f5;
-}
-
-.sort-options input[type="radio"] {
-    cursor: pointer;
-    width: 18px;
-    height: 18px;
-}
-
 .date-filter-select,
-.boolean-filter-select {
+.boolean-filter-select,
+.numeric-filter-select,
+.string-filter-select {
     width: 100%;
     padding: 8px;
     border: 1px solid #ddd;
@@ -945,7 +966,9 @@ input[type="checkbox"] {
 }
 
 .date-filter-select:focus,
-.boolean-filter-select:focus {
+.boolean-filter-select:focus,
+.numeric-filter-select:focus,
+.string-filter-select:focus {
     outline: none;
     border-color: #4CAF50;
 }
@@ -975,6 +998,15 @@ input[type="checkbox"] {
 
 .btn-cancel:hover {
     background-color: #e0e0e0;
+}
+
+.btn-clear {
+    background-color: #ff9800;
+    color: white;
+}
+
+.btn-clear:hover {
+    background-color: #fb8c00;
 }
 
 .btn-accept {
@@ -1023,6 +1055,68 @@ input[type="checkbox"] {
 .date-input:focus {
     outline: none;
     border-color: #4CAF50;
+}
+
+/* Filtros numéricos */
+.numeric-inputs {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    border: 1px solid #e0e0e0;
+}
+
+.numeric-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.numeric-input-group:last-child {
+    margin-bottom: 0;
+}
+
+.numeric-input-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+}
+
+.numeric-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.numeric-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+.numeric-input:disabled {
+    background-color: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+}
+
+/* Filtros de string */
+.string-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.string-filter-section .filter-input {
+    margin-bottom: 0;
+}
+
+.string-filter-select {
+    margin-bottom: 0;
 }
 
 /* ==================== Diálogo de Configuración de Columnas ==================== */

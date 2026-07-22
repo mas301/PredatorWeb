@@ -30,6 +30,9 @@ public class GridPageState
     public bool TempSortAscending { get; set; } = true;
     public string TempFilterValue { get; set; } = "";
 
+    // Filtrado de strings
+    public StringFilterType TempStringFilterType { get; set; } = StringFilterType.Contains;
+
     // Filtrado de fechas
     public DateFilterType TempDateFilterType { get; set; } = DateFilterType.None;
     public DateTime? TempDateFrom { get; set; }
@@ -37,6 +40,11 @@ public class GridPageState
 
     // Filtrado de booleanos
     public BooleanFilterType TempBooleanFilterType { get; set; } = BooleanFilterType.All;
+
+    // Filtrado numérico
+    public NumericFilterType TempNumericFilterType { get; set; } = NumericFilterType.None;
+    public decimal? TempNumericValue1 { get; set; }
+    public decimal? TempNumericValue2 { get; set; }
 
     // Filtros de selección múltiple (para columnas con pocos valores distintos)
     public List<string>? AvailableFilterValues { get; set; } = null;
@@ -46,8 +54,10 @@ public class GridPageState
     // Filtros activos por columna
     public Dictionary<string, string> ColumnFilters { get; } = new();
     public Dictionary<string, List<string>> MultiValueFilters { get; } = new();
+    public Dictionary<string, (StringFilterType Type, string Value)> StringFilters { get; } = new();
     public Dictionary<string, (DateFilterType Type, DateTime? From, DateTime? To)> DateFilters { get; } = new();
     public Dictionary<string, BooleanFilterType> BooleanFilters { get; } = new();
+    public Dictionary<string, (NumericFilterType Type, decimal? Value1, decimal? Value2)> NumericFilters { get; } = new();
 
     // Selección de filas
     public HashSet<DataRow> SelectedRows { get; } = new();
@@ -73,16 +83,20 @@ public class GridPageState
     {
         return ColumnFilters.Any() || 
                MultiValueFilters.Any() ||
+               StringFilters.Any() ||
                DateFilters.Any() || 
-               BooleanFilters.Any(f => f.Value != BooleanFilterType.All);
+               BooleanFilters.Any(f => f.Value != BooleanFilterType.All) ||
+               NumericFilters.Any(f => f.Value.Type != NumericFilterType.None);
     }
 
     public void ClearAllFilters()
     {
         ColumnFilters.Clear();
         MultiValueFilters.Clear();
+        StringFilters.Clear();
         DateFilters.Clear();
         BooleanFilters.Clear();
+        NumericFilters.Clear();
     }
 
     public void Dispose()
@@ -98,9 +112,13 @@ public enum DateFilterType
 {
     None,
     Today,
+    Yesterday,
     ThisWeek,
+    LastWeek,
     ThisMonth,
+    LastMonth,
     ThisYear,
+    LastYear,
     CustomRange
 }
 
@@ -109,4 +127,24 @@ public enum BooleanFilterType
     All,
     Checked,
     Unchecked
+}
+
+public enum NumericFilterType
+{
+    None,
+    Equal,
+    NotEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Between
+}
+
+public enum StringFilterType
+{
+    Contains,
+    StartsWith,
+    EndsWith,
+    Equals
 }
