@@ -10,7 +10,7 @@
             NombreVista= "VenCotizacionVistaLista";
             NombreClavePrimaria= "CotizacionId";
             NombrePlural = "Cotizaciones";
-            Tipo = TipoEntidad.Maestro;
+            FiltrarxEmpresa = true;
         }
     }
 }

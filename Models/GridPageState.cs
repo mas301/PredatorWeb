@@ -54,7 +54,7 @@ public class GridPageState
 
     // Paginación
     public int CurrentPage { get; set; } = 1;
-    public int PageSize { get; set; } = 100;
+    public int PageSize { get; set; } = 1000;
     public int TotalPages => GridData == null || GridData.Rows.Count == 0 
         ? 1 
         : (int)Math.Ceiling((double)GridData.Rows.Count / PageSize);

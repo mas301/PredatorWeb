@@ -10,7 +10,7 @@
             NombreVista= "VenGuiaRemisionVistaLista";
             NombreClavePrimaria= "GuiaRemisionId";
             NombrePlural = "Guias de Remisión";
-            Tipo = TipoEntidad.Maestro;
+            FiltrarxEmpresa = true;
         }
     }
 }

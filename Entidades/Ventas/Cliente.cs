@@ -10,7 +10,7 @@ namespace PredatorWeb.Entidades.Ventas
             NombreVista = "VenClienteVistaLista";
             NombreClavePrimaria = "ClienteId";
             NombrePlural = "Clientes";
-            Tipo = TipoEntidad.Maestro;
+            FiltrarxEmpresa = true;
         }
     }
 }

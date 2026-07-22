@@ -9,11 +9,13 @@ namespace PredatorWeb.Services
     {
         private readonly Datos _datos;
         private readonly EntidadResolverService _entidadResolver;
+        private readonly SessionService _sessionService;
 
-        public EntidadService(Datos datos, EntidadResolverService entidadResolver)
+        public EntidadService(Datos datos, EntidadResolverService entidadResolver, SessionService sessionService)
         {
             _datos = datos;
             _entidadResolver = entidadResolver;
+            _sessionService = sessionService;
         }
 
         public async Task<DataTable> GetEntidadDataAsync(string nombreEntidad)
@@ -42,7 +44,7 @@ namespace PredatorWeb.Services
                 throw new InvalidOperationException($"No se encontró configuración para la entidad: '{nombreEntidad}'");
             }
 
-            var query = BuildFilteredQuery(entidad.NombreVista, filters);
+            var query = BuildFilteredQuery(entidad, filters);
 
             // Verificar cancelación antes de ejecutar la consulta
             cancellationToken.ThrowIfCancellationRequested();
@@ -52,10 +54,21 @@ namespace PredatorWeb.Services
             return dataTable;
         }
 
-        private string BuildFilteredQuery(string viewName, ServerFilter? filters)
+        private string BuildFilteredQuery(Entidad entidad, ServerFilter? filters)
         {
-            var query = new StringBuilder($"SELECT * FROM {viewName}");
+            var query = new StringBuilder($"SELECT * FROM {entidad.NombreVista}");
             var whereClauses = new List<string>();
+
+            // Filtro automático por EmpresaId si la entidad lo requiere
+            if (entidad.FiltrarxEmpresa && _sessionService.EmpresaId.HasValue)
+            {
+                whereClauses.Add($"EmpresaId = {_sessionService.EmpresaId.Value}");
+                Console.WriteLine($"🔵 Filtro EmpresaId aplicado: {_sessionService.EmpresaId.Value}");
+            }
+            else
+            {
+                Console.WriteLine($"🔴 Filtro EmpresaId NO aplicado - FiltrarxEmpresa: {entidad.FiltrarxEmpresa}, EmpresaId: {_sessionService.EmpresaId}");
+            }
 
             if (filters != null)
             {
@@ -130,24 +143,26 @@ namespace PredatorWeb.Services
                         whereClauses.Add($"{columnName} = {boolValue}");
                     }
                 }
-
-                // WHERE
-                if (whereClauses.Any())
-                {
-                    query.Append(" WHERE ");
-                    query.Append(string.Join(" AND ", whereClauses));
-                }
-
-                // ORDER BY
-                if (!string.IsNullOrEmpty(filters.SortColumn))
-                {
-                    var columnName = SanitizeColumnName(filters.SortColumn);
-                    var direction = filters.SortAscending ? "ASC" : "DESC";
-                    query.Append($" ORDER BY {columnName} {direction}");
-                }
             }
 
-            return query.ToString();
+            // WHERE (se construye fuera del if(filters) para incluir el filtro de EmpresaId siempre)
+            if (whereClauses.Any())
+            {
+                query.Append(" WHERE ");
+                query.Append(string.Join(" AND ", whereClauses));
+            }
+
+            // ORDER BY (debe ir después del WHERE)
+            if (filters != null && !string.IsNullOrEmpty(filters.SortColumn))
+            {
+                var columnName = SanitizeColumnName(filters.SortColumn);
+                var direction = filters.SortAscending ? "ASC" : "DESC";
+                query.Append($" ORDER BY {columnName} {direction}");
+            }
+
+            var finalQuery = query.ToString();
+            Console.WriteLine($"📋 Query final: {finalQuery}");
+            return finalQuery;
         }
 
         private string SanitizeColumnName(string columnName)

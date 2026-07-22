@@ -10,7 +10,7 @@
             NombreVista= "VenNotaPedidoVistaLista";
             NombreClavePrimaria= "NotaPedidoId";
             NombrePlural = "Pedidos de Venta";
-            Tipo = TipoEntidad.Maestro;
+            FiltrarxEmpresa = true;
         }
     }
 }
