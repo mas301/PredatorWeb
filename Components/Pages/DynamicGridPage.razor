@@ -347,6 +347,9 @@
     [Parameter]
     public string? NombreEntidad { get; set; }
 
+    [Parameter]
+    public EventCallback<(string Title, DataTable Data)> OpenPrintPreviewTab { get; set; }
+
     // Estado encapsulado de la grilla
     private GridPageState state = new();
 
@@ -1185,9 +1188,9 @@
     private string GetColumnDisplayName(string columnName)
     {
         var config = state.ColumnConfigs.FirstOrDefault(c => c.ColumnName == columnName);
-        if (config != null)
+        if (config != null && !string.IsNullOrWhiteSpace(config.CustomTitle))
         {
-            return config.DisplayName;
+            return config.CustomTitle;
         }
         return FormatColumnName(columnName);
     }
@@ -1584,44 +1587,58 @@
         // TODO: Implementar lógica para eliminar registro seleccionado (con confirmación)
     }
 
-    private void OnImprimir()
+    private async void OnImprimir()
     {
         if (state.GridData == null || state.GridData.Rows.Count == 0)
             return;
 
         try
         {
-            // Crear una copia del DataTable con TODAS las columnas visibles
             var previewTable = new DataTable();
 
-            // Agregar solo las columnas visibles en el orden configurado
             foreach (var column in GetOrderedColumns())
             {
                 if (!ShouldHideColumn(column.ColumnName))
                 {
-                    previewTable.Columns.Add(column.ColumnName, column.DataType);
+                    var displayName = GetColumnDisplayName(column.ColumnName);
+                    previewTable.Columns.Add(displayName, column.DataType);
                 }
             }
 
-            // Copiar todas las filas filtradas/ordenadas (sin paginación)
             foreach (DataRow row in GetFilteredData())
             {
                 var newRow = previewTable.NewRow();
-                foreach (DataColumn column in previewTable.Columns)
+                int colIndex = 0;
+                foreach (var column in GetOrderedColumns())
                 {
-                    newRow[column.ColumnName] = row[column.ColumnName];
+                    if (!ShouldHideColumn(column.ColumnName))
+                    {
+                        newRow[colIndex++] = row[column.ColumnName];
+                    }
                 }
                 previewTable.Rows.Add(newRow);
             }
 
-            // Guardar en el estado y mostrar el diálogo
-            state.PrintPreviewData = previewTable;
-            state.ShowPrintPreview = true;
-            StateHasChanged();
+            var entidad = NombreEntidad != null ? EntidadService.GetEntidad(NombreEntidad) : null;
+            var title = entidad?.NombrePlural ?? NombreEntidad ?? "Vista Previa";
+
+            if (OpenPrintPreviewTab.HasDelegate)
+            {
+                // Abrir como pestaña en MainPage
+                await OpenPrintPreviewTab.InvokeAsync((title, previewTable));
+            }
+            else
+            {
+                // Fallback: usar el modal interno
+                state.PrintPreviewData = previewTable;
+                state.ShowPrintPreview = true;
+                StateHasChanged();
+            }
         }
         catch (Exception ex)
         {
-            // Registrar error si es necesario
+            state.ErrorMessage = $"Error al preparar la vista previa: {ex.Message}";
+            StateHasChanged();
         }
     }
 
@@ -1669,41 +1686,63 @@
         if (state.GridData == null || state.GridData.Rows.Count == 0)
             return;
 
+        // Mostrar indicador de carga inmediatamente
+        state.IsLoading = true;
+        state.ShowLoadingDialog = true;
+        state.LoadingMessage = "Generando archivo Excel...";
+        StateHasChanged();
+
         try
         {
-            // Crear una copia del DataTable con TODAS las columnas visibles
+            // Preparar el DataTable en el hilo actual (acceso a UI state)
             var exportTable = new DataTable();
 
-            // Agregar solo las columnas visibles
             foreach (DataColumn column in state.GridData.Columns)
             {
                 if (!ShouldHideColumn(column.ColumnName))
                 {
-                    exportTable.Columns.Add(column.ColumnName, column.DataType);
+                    var displayName = GetColumnDisplayName(column.ColumnName);
+                    exportTable.Columns.Add(displayName, column.DataType);
                 }
             }
 
-            // Copiar todas las filas filtradas/ordenadas (sin paginación)
             foreach (DataRow row in GetFilteredData())
             {
                 var newRow = exportTable.NewRow();
-                foreach (DataColumn column in exportTable.Columns)
+                int colIndex = 0;
+                foreach (DataColumn column in state.GridData.Columns)
                 {
-                    newRow[column.ColumnName] = row[column.ColumnName];
+                    if (!ShouldHideColumn(column.ColumnName))
+                    {
+                        newRow[colIndex++] = row[column.ColumnName];
+                    }
                 }
                 exportTable.Rows.Add(newRow);
             }
 
-            // Generar el archivo Excel
-            var excelBytes = ExcelExportService.ExportToExcel(exportTable, NombreEntidad ?? "Datos");
+            var sheetName = (NombreEntidad ?? "Datos");
+            if (sheetName.Length > 31)
+                sheetName = sheetName[..31];
+
+            var fileName = $"{NombreEntidad}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+            // Generar el Excel en un hilo de fondo para no bloquear la UI
+            var excelBytes = await Task.Run(() => ExcelExportService.ExportToExcel(exportTable, sheetName));
 
             // Descargar el archivo usando JavaScript
-            var fileName = $"{NombreEntidad}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
             await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes));
         }
         catch (Exception ex)
         {
-            // Registrar error si es necesario
+            state.ErrorMessage = $"Error al exportar: {ex.Message}";
+            if (ex.InnerException != null)
+                state.ErrorMessage += $"\n{ex.InnerException.Message}";
+        }
+        finally
+        {
+            state.IsLoading = false;
+            state.ShowLoadingDialog = false;
+            StateHasChanged();
         }
     }
 

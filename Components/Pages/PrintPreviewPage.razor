@@ -1,0 +1,148 @@
+@namespace PredatorWeb.Components.Pages
+@using System.Data
+@using Microsoft.JSInterop
+@inject Services.ExcelExportService ExcelExportService
+@inject IJSRuntime JSRuntime
+
+<div class="print-preview-page">
+    <div class="print-preview-toolbar no-print">
+        <h3>🖨️ Vista Previa - @Title</h3>
+        <div class="print-preview-actions">
+            <button class="toolbar-btn" @onclick="HandleExport" title="Exportar a Excel">
+                <span class="btn-icon">📤</span>
+                <span class="btn-text">Exportar</span>
+            </button>
+            <button class="toolbar-btn" @onclick="HandlePrint" title="Imprimir">
+                <span class="btn-icon">🖨️</span>
+                <span class="btn-text">Imprimir</span>
+            </button>
+            <button class="toolbar-btn toolbar-btn-danger" @onclick="OnClose" title="Cerrar">
+                <span class="btn-icon">✕</span>
+                <span class="btn-text">Cerrar</span>
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-message" style="margin: 10px;">
+            <p>@errorMessage</p>
+        </div>
+    }
+
+    <div class="print-preview-page-scroll">
+        <div class="print-preview-content" id="printArea">
+            <div class="print-header">
+                <h2>@Title</h2>
+                <p class="print-date">Fecha: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+            </div>
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        @foreach (DataColumn column in PreviewData.Columns)
+                        {
+                            <th class="@(IsNumericColumn(column) ? "text-right" : "")">@column.ColumnName</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (DataRow row in PreviewData.Rows)
+                    {
+                        <tr>
+                            @foreach (DataColumn column in PreviewData.Columns)
+                            {
+                                <td class="@(IsNumericColumn(column) ? "text-right" : "")">@FormatCellValue(row[column])</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="print-totals-row">
+                        @{
+                            var columns = PreviewData.Columns.Cast<DataColumn>().ToList();
+                            var colspanForLabel = Math.Min(3, Math.Max(1, columns.Count / 2));
+                            var colIdx = 0;
+                        }
+                        <td class="print-totals-label" colspan="@colspanForLabel"><strong>TOTALES</strong></td>
+                        @foreach (var column in columns)
+                        {
+                            colIdx++;
+                            @if (colIdx > colspanForLabel)
+                            {
+                                <td class="@(IsNumericColumn(column) ? "text-right" : "")">
+                                    @if (IsNumericColumn(column))
+                                    {
+                                        <strong>@GetColumnTotal(column).ToString("N2")</strong>
+                                    }
+                                </td>
+                            }
+                        }
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public DataTable PreviewData { get; set; } = new();
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string? errorMessage;
+
+    private async Task HandleExport()
+    {
+        try
+        {
+            errorMessage = null;
+            var sheetName = Title.Length > 31 ? Title[..31] : Title;
+            var excelBytes = await Task.Run(() => ExcelExportService.ExportToExcel(PreviewData, sheetName));
+            var fileName = $"{Title}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(excelBytes));
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error al exportar: {ex.Message}";
+        }
+    }
+
+    private async Task HandlePrint()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private bool IsNumericColumn(DataColumn column)
+    {
+        var numericTypes = new[]
+        {
+            typeof(int), typeof(long), typeof(short), typeof(byte),
+            typeof(decimal), typeof(double), typeof(float),
+            typeof(int?), typeof(long?), typeof(short?), typeof(byte?),
+            typeof(decimal?), typeof(double?), typeof(float?)
+        };
+        return numericTypes.Contains(column.DataType);
+    }
+
+    private string FormatCellValue(object? value)
+    {
+        if (value == null || value == DBNull.Value) return "";
+        if (value is DateTime d) return d.ToString("dd/MM/yyyy");
+        if (value is bool b) return b ? "✓" : "";
+        if (value is decimal || value is double || value is float)
+            if (decimal.TryParse(value.ToString(), out var n)) return n.ToString("N2");
+        return value.ToString() ?? "";
+    }
+
+    private decimal GetColumnTotal(DataColumn column)
+    {
+        decimal total = 0;
+        foreach (DataRow row in PreviewData.Rows)
+        {
+            var v = row[column];
+            if (v != null && v != DBNull.Value && decimal.TryParse(v.ToString(), out var n))
+                total += n;
+        }
+        return total;
+    }
+}

@@ -2,6 +2,7 @@
 @layout SimpleLayout
 @using PredatorWeb.Services
 @using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@using PredatorWeb.Components.Pages
 @inject MenuService MenuService
 @inject EntidadService EntidadService
 @inject Datos DatosService
@@ -128,11 +129,11 @@
                             <div class="form-group">
                                 @if (!isLoggedIn)
                                 {
-                                    <button class="btn-primary" @onclick="OnLoginClick">Iniciar Sesión</button>
+                                    <button class="btn-primary" @onclick="OnLoginClick" disabled="@(!_pageReady)">Iniciar Sesión</button>
                                 }
                                 else
                                 {
-                                    <button class="btn-primary" @onclick="OnLogoutClick">Logout</button>
+                                    <button class="btn-logout" @onclick="OnLogoutClick">Logout</button>
                                 }
                             </div>
                             @if (!isLoggedIn)
@@ -197,6 +198,7 @@
 
     private const string CredentialsStorageKey = "predator_credentials";
     private const string SedeStorageKey = "predator_sede_id";
+    private bool _pageReady = false;
 
     protected override Task OnInitializedAsync()
     {
@@ -208,6 +210,8 @@
         if (firstRender)
         {
             await LoadSavedCredentialsAsync();
+            _pageReady = true;
+            StateHasChanged();
         }
     }
 
@@ -578,7 +582,8 @@
                 ComponentType = typeof(DynamicGridPage),
                 Parameters = new Dictionary<string, object>
                 {
-                    { "NombreEntidad", nombreEntidad }
+                    { "NombreEntidad", nombreEntidad },
+                    { "OpenPrintPreviewTab", EventCallback.Factory.Create<(string, System.Data.DataTable)>(this, OpenPrintPreviewTabHandler) }
                 }
             };
 
@@ -590,6 +595,56 @@
     private void OnTabClose(MouseEventArgs e, Models.ListaPage tab)
     {
         CloseTab(tab);
+    }
+
+    private int _printPreviewVersion = 0;
+    private const string PrintTabKey = "__print__";
+
+    private void OpenPrintPreviewTabHandler((string Title, System.Data.DataTable Data) args)
+    {
+        _printPreviewVersion++;
+
+        var existing = openTabs.FirstOrDefault(t => t.NombreEntidad.StartsWith(PrintTabKey));
+        if (existing != null)
+        {
+            // Reemplazar la pestaña existente con datos nuevos forzando re-render con nueva key
+            var tabIndex = openTabs.IndexOf(existing);
+            Models.ListaPage? newTab = null;
+            newTab = new Models.ListaPage
+            {
+                Title = "🖨️ Impresión",
+                NombreEntidad = $"{PrintTabKey}{_printPreviewVersion}",
+                ComponentType = typeof(PrintPreviewPage),
+                Parameters = new Dictionary<string, object>
+                {
+                    { "Title", args.Title },
+                    { "PreviewData", args.Data },
+                    { "OnClose", EventCallback.Factory.Create(this, () => CloseTab(newTab!)) }
+                }
+            };
+            openTabs[tabIndex] = newTab;
+            activeTabIndex = tabIndex + 1;
+        }
+        else
+        {
+            Models.ListaPage? newTab = null;
+            newTab = new Models.ListaPage
+            {
+                Title = "🖨️ Impresión",
+                NombreEntidad = $"{PrintTabKey}{_printPreviewVersion}",
+                ComponentType = typeof(PrintPreviewPage),
+                Parameters = new Dictionary<string, object>
+                {
+                    { "Title", args.Title },
+                    { "PreviewData", args.Data },
+                    { "OnClose", EventCallback.Factory.Create(this, () => CloseTab(newTab!)) }
+                }
+            };
+            openTabs.Add(newTab);
+            activeTabIndex = openTabs.Count;
+        }
+
+        StateHasChanged();
     }
 
     private void CloseTab(Models.ListaPage tab)
