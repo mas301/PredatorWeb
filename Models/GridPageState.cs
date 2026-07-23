@@ -59,8 +59,8 @@ public class GridPageState
     public Dictionary<string, BooleanFilterType> BooleanFilters { get; } = new();
     public Dictionary<string, (NumericFilterType Type, decimal? Value1, decimal? Value2)> NumericFilters { get; } = new();
 
-    // Selección de filas
-    public HashSet<DataRow> SelectedRows { get; } = new();
+    // Selección de filas (almacenamos IDs de clave primaria en lugar de referencias DataRow)
+    public HashSet<string> SelectedRowIds { get; } = new();
 
     // Paginación
     public int CurrentPage { get; set; } = 1;
@@ -104,7 +104,7 @@ public class GridPageState
         CancellationTokenSource?.Cancel();
         CancellationTokenSource?.Dispose();
         CancellationTokenSource = null;
-        SelectedRows.Clear();
+        SelectedRowIds.Clear();
     }
 }
 

@@ -40,10 +40,14 @@
                         </div>
                         <div class="col-title">
                             <input type="text" 
-                                   class="title-input"
+                                   class="title-input @(HasDuplicateTitle(index) ? "title-input-error" : "")"
                                    value="@(config.CustomTitle ?? "")" 
                                    @onchange="@(e => UpdateTitle(index, e.Value?.ToString()))"
                                    placeholder="@FormatColumnName(config.ColumnName)" />
+                            @if (HasDuplicateTitle(index))
+                            {
+                                <span class="title-error-icon" title="Título duplicado">⚠️</span>
+                            }
                         </div>
                         <div class="col-total">
                             @if (config.IsNumeric)
@@ -67,8 +71,14 @@
             </div>
         </div>
         <div class="modal-footer">
+            @if (HasAnyDuplicates())
+            {
+                <div class="validation-error">
+                    ⚠️ Hay títulos de columna duplicados. Por favor corrígelos antes de continuar.
+                </div>
+            }
             <button class="btn-modal btn-cancel" @onclick="OnCancel">Cancelar</button>
-            <button class="btn-modal btn-accept" @onclick="HandleAccept">Aceptar</button>
+            <button class="btn-modal btn-accept" @onclick="HandleAccept" disabled="@HasAnyDuplicates()">Aceptar</button>
         </div>
     </div>
 </div>
@@ -146,8 +156,40 @@
         }
         else
         {
-            ColumnConfigs[index].CustomTitle = newTitle;
+            ColumnConfigs[index].CustomTitle = newTitle.Trim();
         }
+    }
+
+    private bool HasDuplicateTitle(int index)
+    {
+        var currentConfig = ColumnConfigs[index];
+        var currentTitle = GetEffectiveTitle(currentConfig);
+
+        // Contar cuántas veces aparece este título
+        var count = ColumnConfigs
+            .Select((config, idx) => new { config, idx })
+            .Count(x => GetEffectiveTitle(x.config).Equals(currentTitle, StringComparison.OrdinalIgnoreCase));
+
+        return count > 1;
+    }
+
+    private bool HasAnyDuplicates()
+    {
+        var titles = ColumnConfigs
+            .Select(c => GetEffectiveTitle(c))
+            .ToList();
+
+        // Verificar si hay títulos duplicados (case-insensitive)
+        return titles.GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+                     .Any(g => g.Count() > 1);
+    }
+
+    private string GetEffectiveTitle(ColumnConfig config)
+    {
+        // Devuelve el título efectivo que se mostrará
+        return !string.IsNullOrWhiteSpace(config.CustomTitle) 
+            ? config.CustomTitle.Trim()
+            : FormatColumnName(config.ColumnName);
     }
 
     private string FormatColumnName(string columnName)

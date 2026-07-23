@@ -63,11 +63,6 @@ namespace PredatorWeb.Services
             if (entidad.FiltrarxEmpresa && _sessionService.EmpresaId.HasValue)
             {
                 whereClauses.Add($"EmpresaId = {_sessionService.EmpresaId.Value}");
-                Console.WriteLine($"🔵 Filtro EmpresaId aplicado: {_sessionService.EmpresaId.Value}");
-            }
-            else
-            {
-                Console.WriteLine($"🔴 Filtro EmpresaId NO aplicado - FiltrarxEmpresa: {entidad.FiltrarxEmpresa}, EmpresaId: {_sessionService.EmpresaId}");
             }
 
             if (filters != null)
@@ -254,9 +249,7 @@ namespace PredatorWeb.Services
                 query.Append($" ORDER BY {columnName} {direction}");
             }
 
-            var finalQuery = query.ToString();
-            Console.WriteLine($"📋 Query final: {finalQuery}");
-            return finalQuery;
+            return query.ToString();
         }
 
         private string SanitizeColumnName(string columnName)

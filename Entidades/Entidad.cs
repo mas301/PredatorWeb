@@ -16,5 +16,6 @@
         public string NombrePlural { get; set; } = "";
         public TipoEntidad Tipo { get; set; } = TipoEntidad.Maestro;
         public bool FiltrarxEmpresa { get; set; } = false;
+        
     }
 }

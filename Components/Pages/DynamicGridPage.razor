@@ -152,9 +152,26 @@
                 <thead>
                     <tr>
                         <th class="checkbox-column">
-                            <input type="checkbox"
-                                   checked="@AreAllSelected()"
-                                   @onchange="ToggleSelectAll" />
+                            <div class="th-container">
+                                <input type="checkbox"
+                                       checked="@AreAllSelected()"
+                                       @onchange="ToggleSelectAll" />
+                                <div class="th-icons">
+                                    <span class="th-icon sort-icon @(state.SortColumn == "_Selection" ? "active" : "")"
+                                          @onclick="@(() => OnSortSelection())"
+                                          @onclick:stopPropagation="true"
+                                          title="Ordenar">
+                                        @if (state.SortColumn == "_Selection")
+                                        {
+                                            @(state.SortAscending ? "▲" : "▼")
+                                        }
+                                        else
+                                        {
+                                            <text>⇅</text>
+                                        }
+                                    </span>
+                                </div>
+                            </div>
                          </th>
                         @foreach (DataColumn column in GetOrderedColumns())
                         {
@@ -197,13 +214,16 @@
                     {
                         @foreach (DataRow row in GetPagedData())
                         {
-                            <tr class="@(IsRowSelected(row) ? "row-selected" : "")" 
-                                @onclick="@(() => SelectSingleRow(row))" 
+                            var currentRow = row; // Variable local para captura correcta en lambdas
+                            var rowId = GetRowId(currentRow); // Obtener ID para el @key directive
+                            <tr @key="rowId" 
+                                class="@(IsRowSelected(currentRow) ? "row-selected" : "")" 
+                                @onclick="@(() => SelectSingleRow(currentRow))" 
                                 style="cursor: pointer;">
                                 <td class="checkbox-column" @onclick:stopPropagation="true">
                                     <input type="checkbox"
-                                                       checked="@IsRowSelected(row)"
-                                                       @onchange="@(e => ToggleRowSelection(row, e))" />
+                                                       checked="@IsRowSelected(currentRow)"
+                                                       @onchange="@(e => ToggleRowSelection(currentRow, e))" />
                                             </td>
                                            @foreach (DataColumn column in GetOrderedColumns())
                                            {
@@ -213,13 +233,13 @@
                                             @if (IsBooleanColumn(column))
                                             {
                                                 <input type="checkbox" 
-                                                       checked="@GetBooleanValue(row[column])" 
+                                                       checked="@GetBooleanValue(currentRow[column])" 
                                                        disabled 
                                                        style="cursor: default;" />
                                             }
                                             else
                                             {
-                                                @FormatCellValue(row[column], column)
+                                                @FormatCellValue(currentRow[column], column)
                                             }
                                         </td>
                                     }
@@ -248,6 +268,13 @@
                                 <span class="totals-text-nowrap">
                                     Total de registros: @GetFilteredData().Count()@(state.ShowPagination ? $" (Página {state.CurrentPage} de {state.TotalPages})" : "")
                                 </span>
+                                @if (state.SelectedRowIds.Count > 0)
+                                {
+                                    <span class="totals-separator">|</span>
+                                    <span class="totals-selected-count">
+                                        ✓ Seleccionados: @state.SelectedRowIds.Count
+                                    </span>
+                                }
                                 @if (state.ShowPagination)
                                 {
                                     <span class="totals-separator">|</span>
@@ -353,13 +380,93 @@
     // Estado encapsulado de la grilla
     private GridPageState state = new();
 
+    // Helpers para trabajar con selección basada en IDs
+    private string? GetRowId(DataRow row)
+    {
+        var entidad = EntidadService.GetEntidad(NombreEntidad);
+        if (entidad == null || string.IsNullOrEmpty(entidad.NombreClavePrimaria))
+        {
+            return null;
+        }
+
+        if (!row.Table.Columns.Contains(entidad.NombreClavePrimaria))
+        {
+            return null;
+        }
+
+        return row[entidad.NombreClavePrimaria]?.ToString();
+    }
+
+    private bool IsRowSelected(DataRow row)
+    {
+        var id = GetRowId(row);
+        return id != null && state.SelectedRowIds.Contains(id);
+    }
+
+    private DataRow? GetSelectedRow()
+    {
+        if (state.SelectedRowIds.Count != 1 || state.GridData == null)
+            return null;
+
+        var id = state.SelectedRowIds.First();
+        var entidad = EntidadService.GetEntidad(NombreEntidad);
+        if (entidad == null || string.IsNullOrEmpty(entidad.NombreClavePrimaria))
+            return null;
+
+        return state.GridData.AsEnumerable()
+            .FirstOrDefault(row => row[entidad.NombreClavePrimaria]?.ToString() == id);
+    }
+
+    private List<DataRow> GetSelectedRows()
+    {
+        if (state.SelectedRowIds.Count == 0 || state.GridData == null)
+            return new List<DataRow>();
+
+        var entidad = EntidadService.GetEntidad(NombreEntidad);
+        if (entidad == null || string.IsNullOrEmpty(entidad.NombreClavePrimaria))
+            return new List<DataRow>();
+
+        return state.GridData.AsEnumerable()
+            .Where(row =>
+            {
+                var id = row[entidad.NombreClavePrimaria]?.ToString();
+                return id != null && state.SelectedRowIds.Contains(id);
+            })
+            .ToList();
+    }
+
+    // Limpia los IDs seleccionados que ya no existen en los datos actuales
+    private void CleanupOrphanedSelections()
+    {
+        if (state.GridData == null || state.SelectedRowIds.Count == 0)
+            return;
+
+        var entidad = EntidadService.GetEntidad(NombreEntidad);
+        if (entidad == null || string.IsNullOrEmpty(entidad.NombreClavePrimaria))
+            return;
+
+        // Obtener todos los IDs que existen en los datos actuales
+        var existingIds = state.GridData.AsEnumerable()
+            .Select(row => row[entidad.NombreClavePrimaria]?.ToString())
+            .Where(id => id != null)
+            .ToHashSet();
+
+        // Remover IDs que ya no existen
+        var orphanedIds = state.SelectedRowIds
+            .Where(id => !existingIds.Contains(id))
+            .ToList();
+
+        foreach (var orphanedId in orphanedIds)
+        {
+            state.SelectedRowIds.Remove(orphanedId);
+        }
+    }
+
     // Backup temporal de la configuración de columnas para "Cancelar"
     private List<ColumnConfig>? tempColumnConfigsBackup = null;
 
     public async ValueTask DisposeAsync()
     {
-        await LogToConsole($"🔴 Cerrando pestaña {NombreEntidad}");
-
         // Guardar configuración antes de disponer
         await SaveGridConfigurationAsync();
 
@@ -367,16 +474,6 @@
     }
 
     private bool _hasLoaded = false;
-
-    // Helper para logging en navegador
-    private async Task LogToConsole(string message)
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("console.log", message);
-        }
-        catch { }
-    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -424,90 +521,56 @@
         if (string.IsNullOrEmpty(NombreEntidad))
             return;
 
-        await LogToConsole($"🟢 LoadDataAsync iniciado para: {NombreEntidad}");
-
         // Cancelar cualquier carga anterior en progreso
         state.CancellationTokenSource?.Cancel();
         state.CancellationTokenSource?.Dispose();
         state.CancellationTokenSource = new CancellationTokenSource();
 
         state.IsLoading = true;
-        state.ShowLoadingDialog = true; // Mostrar INMEDIATAMENTE
+        state.ShowLoadingDialog = true;
         state.ErrorMessage = null;
         state.StackTrace = null;
         state.ProgressPercentage = 10;
         state.LoadingMessage = "Cargando datos...";
-        StateHasChanged(); // Forzar actualización inmediata
+        StateHasChanged();
 
-        // Dar un pequeño tiempo para que la UI se actualice
         await Task.Delay(100);
 
         try
         {
             var token = state.CancellationTokenSource.Token;
-            await LogToConsole($"🟢 Token creado - IsCancellationRequested: {token.IsCancellationRequested}");
 
             // Iniciar simulación de progreso en paralelo
             var progressTask = SimulateProgress(token);
 
-            await LogToConsole($"🟢 Antes de llamar GetEntidadDataAsync");
-
-            // **CRÍTICO**: Ejecutar en Task.Run() para no bloquear el circuito de Blazor
-            // Esto permite que los eventos de UI (como el botón Cancelar) se procesen
+            // Ejecutar en Task.Run() para no bloquear el circuito de Blazor
             var loadTask = Task.Run(async () =>
             {
-                Console.WriteLine($"🟡 Dentro de Task.Run - IsCancellationRequested: {token.IsCancellationRequested}");
-                try
-                {
-                    var result = await EntidadService.GetEntidadDataAsync(NombreEntidad, token);
-                    Console.WriteLine($"🟡 EntidadService completado en Task.Run - Filas: {result.Rows.Count}");
-                    return result;
-                }
-                catch (OperationCanceledException)
-                {
-                    Console.WriteLine($"🔴 OperationCanceledException capturada en Task.Run");
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"🔴 Exception en Task.Run: {ex.GetType().Name} - {ex.Message}");
-                    throw;
-                }
+                return await EntidadService.GetEntidadDataAsync(NombreEntidad, token);
             }, token);
 
             state.GridData = await loadTask;
-            await LogToConsole($"🟢 GetEntidadDataAsync completado - Filas: {state.GridData?.Rows.Count ?? 0}");
-
-            state.SelectedRows.Clear();
+            state.SelectedRowIds.Clear();
 
             // Inicializar configuración de columnas si no existe
             if (state.GridData != null && state.ColumnConfigs.Count == 0)
             {
                 InitializeColumnConfigs();
-                // Aplicar configuración guardada después de inicializar columnas
                 ApplyPendingConfiguration();
             }
         }
         catch (OperationCanceledException)
         {
-            Console.WriteLine("🔴 OperationCanceledException capturada en LoadDataAsync");
-            await LogToConsole("🔴 OperationCanceledException capturada en LoadDataAsync");
             // No mostrar error cuando el usuario cancela
-            // No limpiar GridData porque puede tener datos parciales
             state.ErrorMessage = null;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"🔴 Exception capturada: {ex.GetType().Name} - {ex.Message}");
-            await LogToConsole($"🔴 Exception capturada: {ex.GetType().Name} - {ex.Message}");
             state.ErrorMessage = ex.Message;
             state.StackTrace = ex.StackTrace;
         }
         finally
         {
-            Console.WriteLine($"🟢 LoadDataAsync finally - IsLoading: {state.IsLoading}");
-            await LogToConsole($"🟢 LoadDataAsync finally - IsLoading: {state.IsLoading}");
-
             // Forzar cierre del diálogo y actualizar UI
             state.IsLoading = false;
             state.ShowLoadingDialog = false;
@@ -515,11 +578,7 @@
             state.CancellationTokenSource?.Dispose();
             state.CancellationTokenSource = null;
 
-            // CRÍTICO: Usar InvokeAsync para asegurar que StateHasChanged se ejecuta en el contexto correcto
             await InvokeAsync(StateHasChanged);
-
-            Console.WriteLine("🟢 LoadDataAsync finally completado");
-            await LogToConsole("🟢 LoadDataAsync finally completado");
         }
     }
 
@@ -548,64 +607,36 @@
     {
         try
         {
-            // Log síncrono a consola del servidor
-            Console.WriteLine("🔴 CancelLoading llamado");
-
             if (state.CancellationTokenSource != null)
             {
-                Console.WriteLine($"🔴 Token antes: {state.CancellationTokenSource.Token.IsCancellationRequested}");
-
-                // Cancelar el token - CRÍTICO: hacer esto de forma síncrona
                 try
                 {
                     state.CancellationTokenSource.Cancel();
-                    Console.WriteLine($"🔴 Cancel() ejecutado");
                 }
-                catch (ObjectDisposedException ex)
+                catch (ObjectDisposedException)
                 {
-                    Console.WriteLine($"🔴 ObjectDisposedException: {ex.Message}");
+                    // Token ya fue dispuesto
                 }
-                catch (AggregateException ex)
+                catch (AggregateException)
                 {
-                    Console.WriteLine($"🔴 AggregateException: {ex.Message}");
+                    // Excepciones agregadas durante la cancelación
                 }
-
-                Console.WriteLine($"🔴 Token después: {state.CancellationTokenSource.Token.IsCancellationRequested}");
-            }
-            else
-            {
-                Console.WriteLine("🔴 CancellationTokenSource es NULL");
             }
 
-            // Actualizar mensaje - no usar await aquí
             state.LoadingMessage = "Cancelando operación...";
 
-            // Invocar StateHasChanged de forma síncrona si es posible
             try
             {
                 StateHasChanged();
             }
             catch
             {
-                // Si falla, intentar con InvokeAsync en background
                 _ = InvokeAsync(StateHasChanged);
             }
-
-            Console.WriteLine("🔴 CancelLoading completado");
-
-            // Log al navegador de forma asíncrona sin bloquear
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await JSRuntime.InvokeVoidAsync("console.log", "🔴 CancelLoading ejecutado y token cancelado");
-                }
-                catch { }
-            });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"🔴 ERROR en CancelLoading: {ex}");
+            Console.WriteLine($"Error en CancelLoading: {ex.Message}");
         }
     }
 
@@ -626,10 +657,27 @@
     private IEnumerable<DataRow> GetFilteredData()
     {
         // Los datos ya vienen filtrados y ordenados desde el servidor
-        // Este método ahora solo retorna los datos tal cual
+        // Excepto para el ordenamiento por selección que se hace en cliente
         if (state.GridData == null) return Enumerable.Empty<DataRow>();
 
-        return state.GridData.AsEnumerable();
+        var data = state.GridData.AsEnumerable();
+
+        // Aplicar ordenamiento por selección si corresponde
+        if (state.SortColumn == "_Selection")
+        {
+            if (state.SortAscending)
+            {
+                // No seleccionados primero
+                data = data.OrderBy(row => IsRowSelected(row));
+            }
+            else
+            {
+                // Seleccionados primero
+                data = data.OrderByDescending(row => IsRowSelected(row));
+            }
+        }
+
+        return data;
     }
 
     private async Task SortByColumn(string columnName)
@@ -883,6 +931,9 @@
 
             // Reemplazar el DataTable actual con el ordenado
             state.GridData = sortedTable;
+
+            // Limpiar IDs seleccionados que ya no existen después de recrear la tabla
+            CleanupOrphanedSelections();
         }
         catch (Exception ex)
         {
@@ -957,13 +1008,16 @@
             // Construir el objeto de filtros para enviar al servidor
             var serverFilter = new ServerFilter
             {
-                ColumnFilters = new Dictionary<string, string>(state.ColumnFilters),
+                // Filtrar _Selection de los ColumnFilters antes de enviar al servidor
+                ColumnFilters = state.ColumnFilters
+                    .Where(f => f.Key != "_Selection")
+                    .ToDictionary(f => f.Key, f => f.Value),
                 MultiValueFilters = new Dictionary<string, List<string>>(state.MultiValueFilters),
                 StringFilters = new Dictionary<string, StringFilter>(),
                 DateFilters = new Dictionary<string, DateFilter>(),
                 BooleanFilters = new Dictionary<string, BooleanFilterType>(state.BooleanFilters),
                 NumericFilters = new Dictionary<string, NumericFilter>(),
-                SortColumn = state.SortColumn,
+                SortColumn = state.SortColumn == "_Selection" ? null : state.SortColumn, // No enviar ordenamiento de selección al servidor
                 SortAscending = state.SortAscending
             };
 
@@ -1001,7 +1055,9 @@
 
             // Cargar datos con filtros Y cancellation token
             state.GridData = await EntidadService.GetEntidadDataAsync(NombreEntidad, serverFilter, token);
-            state.SelectedRows.Clear();
+
+            // Limpiar IDs seleccionados que ya no existen en los datos filtrados
+            CleanupOrphanedSelections();
 
             // Inicializar configuración de columnas si no existe
             if (state.GridData != null && state.ColumnConfigs.Count == 0)
@@ -1415,60 +1471,100 @@
         return maxColspan + 1;
     }
 
-    private bool IsRowSelected(DataRow row) => state.SelectedRows.Contains(row);
-
     private void ToggleRowSelection(DataRow row, ChangeEventArgs e)
     {
+        var id = GetRowId(row);
+        if (id == null)
+        {
+            return;
+        }
+
         if (e.Value is bool isChecked && isChecked)
         {
-            state.SelectedRows.Add(row);
+            state.SelectedRowIds.Add(id);
         }
         else
         {
-            state.SelectedRows.Remove(row);
+            state.SelectedRowIds.Remove(id);
         }
+
+        StateHasChanged();
     }
 
     private void SelectSingleRow(DataRow row)
     {
+        var id = GetRowId(row);
+        if (id == null) return;
+
         // Deseleccionar todas las filas
-        state.SelectedRows.Clear();
+        state.SelectedRowIds.Clear();
         // Seleccionar solo la fila clickeada
-        state.SelectedRows.Add(row);
+        state.SelectedRowIds.Add(id);
     }
 
     private bool AreAllSelected()
     {
         var pagedRows = GetPagedData().ToList();
-        return pagedRows.Count > 0 && pagedRows.All(state.SelectedRows.Contains);
+        return pagedRows.Count > 0 && pagedRows.All(row => IsRowSelected(row));
     }
 
     private void ToggleSelectAll(ChangeEventArgs e)
     {
         var isChecked = e.Value is bool value && value;
 
-        foreach (var row in GetPagedData())
+        if (isChecked)
         {
-            if (isChecked)
+            // Agregar todas las filas de la página actual
+            foreach (var row in GetPagedData())
             {
-                state.SelectedRows.Add(row);
+                var id = GetRowId(row);
+                if (id != null)
+                {
+                    state.SelectedRowIds.Add(id);
+                }
+            }
+        }
+        else
+        {
+            // Al deseleccionar:
+            // Si todas las filas de esta página estaban seleccionadas, limpiar TODAS las selecciones (incluyendo otras páginas)
+            // Si no, solo remover las de esta página
+            var pagedRows = GetPagedData().ToList();
+            var allPageRowsWereSelected = pagedRows.Count > 0 && pagedRows.All(row => IsRowSelected(row));
+
+            if (allPageRowsWereSelected)
+            {
+                // Limpiar todas las selecciones globalmente
+                state.SelectedRowIds.Clear();
             }
             else
             {
-                state.SelectedRows.Remove(row);
+                // Solo remover las filas de esta página
+                foreach (var row in pagedRows)
+                {
+                    var id = GetRowId(row);
+                    if (id != null)
+                    {
+                        state.SelectedRowIds.Remove(id);
+                    }
+                }
             }
         }
+
+        // Forzar actualización de la UI
+        StateHasChanged();
     }
 
     // Toolbar methods
-    private bool HasSelection() => state.SelectedRows.Count > 0;
+    private bool HasSelection() => state.SelectedRowIds.Count > 0;
 
     private bool CanModify()
     {
         // Solo permitir modificar si hay exactamente UN registro seleccionado
-        if (state.SelectedRows.Count != 1) return false;
+        if (state.SelectedRowIds.Count != 1) return false;
 
-        var row = state.SelectedRows.First();
+        var row = GetSelectedRow();
+        if (row == null) return false;
 
         // Verificar si el registro está anulado
         if (row.Table.Columns.Contains("Anulado"))
@@ -1486,15 +1582,15 @@
     private bool CanConsult()
     {
         // Solo permitir consultar si hay exactamente UN registro seleccionado
-        return state.SelectedRows.Count == 1;
+        return state.SelectedRowIds.Count == 1;
     }
 
     private bool CanDeactivate()
     {
-        if (state.SelectedRows.Count == 0) return false;
+        if (state.SelectedRowIds.Count == 0) return false;
 
         // Verificar que TODOS los registros seleccionados NO estén anulados
-        foreach (var row in state.SelectedRows)
+        foreach (var row in GetSelectedRows())
         {
             if (row.Table.Columns.Contains("Anulado"))
             {
@@ -1511,10 +1607,10 @@
 
     private bool CanReactivate()
     {
-        if (state.SelectedRows.Count == 0) return false;
+        if (state.SelectedRowIds.Count == 0) return false;
 
         // Verificar que TODOS los registros seleccionados estén anulados
-        foreach (var row in state.SelectedRows)
+        foreach (var row in GetSelectedRows())
         {
             if (row.Table.Columns.Contains("Anulado"))
             {
@@ -1535,10 +1631,10 @@
 
     private bool CanDelete()
     {
-        if (state.SelectedRows.Count == 0) return false;
+        if (state.SelectedRowIds.Count == 0) return false;
 
         // Verificar que TODOS los registros seleccionados estén anulados
-        foreach (var row in state.SelectedRows)
+        foreach (var row in GetSelectedRows())
         {
             if (row.Table.Columns.Contains("Anulado"))
             {
@@ -2093,12 +2189,15 @@
 
             // Aplicar FILTROS inmediatamente (antes de decidir qué método de carga usar)
 
-            // Aplicar filtros de texto
+            // Aplicar filtros de texto (excluyendo _Selection que es solo en sesión)
             if (config.FiltrosTexto != null)
             {
                 foreach (var filtro in config.FiltrosTexto)
                 {
-                    state.ColumnFilters[filtro.Key] = filtro.Value;
+                    if (filtro.Key != "_Selection") // Ignorar _Selection si existiera en configuración antigua
+                    {
+                        state.ColumnFilters[filtro.Key] = filtro.Value;
+                    }
                 }
             }
 
@@ -2129,8 +2228,8 @@
                 }
             }
 
-            // Aplicar ordenamiento
-            if (!string.IsNullOrEmpty(config.ColumnaOrden))
+            // Aplicar ordenamiento (ignorar _Selection)
+            if (!string.IsNullOrEmpty(config.ColumnaOrden) && config.ColumnaOrden != "_Selection")
             {
                 state.SortColumn = config.ColumnaOrden;
                 state.SortAscending = config.OrdenAscendente;
@@ -2197,7 +2296,10 @@
                     ShowTotal = c.ShowTotal
                 }).ToList(),
 
-                FiltrosTexto = new Dictionary<string, string>(state.ColumnFilters),
+                // Filtrar _Selection de los filtros antes de guardar
+                FiltrosTexto = state.ColumnFilters
+                    .Where(f => f.Key != "_Selection")
+                    .ToDictionary(f => f.Key, f => f.Value),
 
                 FiltrosFecha = state.DateFilters.ToDictionary(
                     kvp => kvp.Key,
@@ -2214,7 +2316,8 @@
                 FiltrosNumero = new Dictionary<string, List<string>>(state.MultiValueFilters),
 
                 OrdenAscendente = state.SortAscending,
-                ColumnaOrden = state.SortColumn
+                // No guardar _Selection como columna de orden
+                ColumnaOrden = state.SortColumn == "_Selection" ? null : state.SortColumn
             };
 
             // Serializar a JSON
@@ -2222,14 +2325,11 @@
 
             // Guardar en la base de datos
             await ConfigurationService.SaveGridConfigurationAsync(entidad.NombreVista, configJson);
-
-            await LogToConsole($"💾 Configuración guardada para {entidad.NombreVista}");
         }
         catch (Exception ex)
         {
             // Log silencioso - si falla el guardado, no interrumpir el cierre
             Console.WriteLine($"Error al guardar configuración: {ex.Message}");
-            await LogToConsole($"❌ Error al guardar configuración: {ex.Message}");
         }
     }
 
@@ -2269,5 +2369,24 @@
             state.CurrentPage = 1; // Volver a la primera página
         }
     }
+
+    // ===== FILTRO Y ORDENAMIENTO POR SELECCIÓN =====
+
+    private void OnSortSelection()
+    {
+        if (state.SortColumn == "_Selection")
+        {
+            // Alternar orden si ya está ordenando por selección
+            state.SortAscending = !state.SortAscending;
+        }
+        else
+        {
+            // Primera vez ordenando por selección
+            state.SortColumn = "_Selection";
+            state.SortAscending = false; // Seleccionados primero
+        }
+    }
+
+
 
     }
